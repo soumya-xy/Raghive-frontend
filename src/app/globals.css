@@ -1,0 +1,53 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+@layer base {
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-ink);
+    font-family: var(--font-inter-tight), system-ui, -apple-system, sans-serif;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+.font-display {
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+.font-ui {
+  font-family: var(--font-inter-tight), system-ui, sans-serif;
+}
+
+.font-mono {
+  font-family: var(--font-jetbrains-mono), monospace;
+}
+
+/* Custom token helper utility classes */
+.bg-app { background-color: var(--bg-app); }
+.bg-surface { background-color: var(--bg-surface); }
+.border-surface { border-color: var(--border-surface); }
+.text-ink { color: var(--text-ink); }
+.text-muted { color: var(--text-muted); }
+
+.bg-accent-amber { background-color: var(--accent-primary); }
+.bg-accent-amber-light { background-color: var(--accent-primary-light); }
+.text-accent-amber { color: var(--accent-primary); }
+.border-accent-amber { border-color: var(--accent-primary); }
+
+.bg-accent-teal { background-color: var(--accent-secondary); }
+.bg-accent-teal-light { background-color: var(--accent-secondary-light); }
+.text-accent-teal { color: var(--accent-secondary); }
+.border-accent-teal { border-color: var(--accent-secondary); }
+
+.text-status-success { color: var(--status-success); }
+.bg-status-success-light { background-color: var(--status-success-bg); }
+.text-status-warning { color: var(--status-warning); }
+.bg-status-warning-light { background-color: var(--status-warning-bg); }
+.text-status-danger { color: var(--status-danger); }
+.bg-status-danger-light { background-color: var(--status-danger-bg); }
+
+/* Keyboard focus ring styling */
+*:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
