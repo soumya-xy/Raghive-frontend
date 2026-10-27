@@ -1,0 +1,23 @@
+# RAGHive backend — core API, orchestration, persistence
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+python-dotenv>=1.0.1
+python-multipart>=0.0.12
+sqlalchemy>=2.0.36
+httpx>=0.27.0
+openai>=1.54.0
+langchain-core>=0.3.15
+langchain-openai>=0.2.14
+langgraph>=0.2.50
+chromadb>=0.5.20
+numpy>=1.26.0
+yake>=0.4.8
+pymupdf>=1.24.0
+firebase-admin>=6.6.0
+
+# Optional ML extras (install when a GPU / local models are available):
+#   pip install torch transformers sentence-transformers gliner accelerate
+#   python -m spacy download en_core_web_sm
+# bitsandbytes is Linux/CUDA only — skip on Windows.
