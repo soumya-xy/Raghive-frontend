@@ -15,4 +15,5 @@ data/uploads/
 .idea/
 .vscode/
 hf_cache/
-models/
+/models/
+!app/models/

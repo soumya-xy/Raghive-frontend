@@ -50,11 +50,25 @@ def llm_available() -> bool:
         import httpx
 
         base = settings.local_inference_url.rstrip("/")
-        # vLLM exposes /models; some proxies only expose /chat/completions
-        url = base[:-3] + "/models" if base.endswith("/v1") else base + "/models"
-        with httpx.Client(timeout=2.0) as client:
-            r = client.get(url, headers={"Authorization": f"Bearer {settings.local_api_key}"})
-            _llm_reachable = r.status_code < 500
+        # Try standard OpenAI /v1/models first, then fallback to root /models
+        urls = [base + "/models"]
+        if base.endswith("/v1"):
+            urls.append(base[:-3] + "/models")
+        else:
+            urls.append(base + "/v1/models")
+
+        reachable = False
+        with httpx.Client(timeout=5.0) as client:
+            headers = {"Authorization": f"Bearer {settings.local_api_key}"}
+            for u in urls:
+                try:
+                    r = client.get(u, headers=headers)
+                    if r.status_code < 500:
+                        reachable = True
+                        break
+                except Exception:
+                    continue
+        _llm_reachable = reachable
     except Exception:
         _llm_reachable = False
     return _llm_reachable

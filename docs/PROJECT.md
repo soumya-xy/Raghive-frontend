@@ -6,10 +6,11 @@ This is **not** a waste / rag-picking product. **RAG** = Retrieval-Augmented Gen
 
 Associated with an academic research project at **LNMIIT**. The backend planner is derived from the `MA_RAG_BTP` thesis work and rebuilt for a verification-report contract (independent checks, not a blended self-reported confidence score).
 
-| Repo | Path | Role |
+| Part | Path | Role |
 |------|------|------|
-| Frontend | `D:\down\Raghive-frontend` | Next.js web app (marketing, auth, chat workspace, XAI traces) |
-| Backend | `D:\down\Raghive-backend` | FastAPI RAG API (pipeline, vector store, persistence, SSE) |
+| Frontend | `frontend/` | Next.js web app (marketing, auth, chat workspace, XAI traces) |
+| Backend | `backend/` | FastAPI RAG API (pipeline, vector store, persistence, SSE) |
+| Docs | `docs/` | Architectural specs, agent build prompts, and contracts |
 
 ---
 
@@ -53,7 +54,7 @@ Next.js 16 frontend  ──►  FastAPI backend (localhost:8000)
 
 ```text
 # Backend
-cd D:\down\Raghive-backend
+cd backend
 python -m uvicorn app.main:app --reload --port 8000
 
 # Frontend (.env.local)
@@ -61,7 +62,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 NEXT_PUBLIC_USE_MOCK_API=false
 NEXT_PUBLIC_USE_MOCK_AUTH=true
 
-cd D:\down\Raghive-frontend
+cd frontend
 pnpm dev          # port 3000
 ```
 

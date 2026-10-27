@@ -1,8 +1,32 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ==============================================================================
+# RAGHive Monorepo Git Ignore
+# Covers root, frontend/ (Next.js), and backend/ (FastAPI / Python)
+# ==============================================================================
 
-# dependencies
-/node_modules
-/.pnp
+# ------------------------------------------------------------------------------
+# Environment Variables & Secrets
+# ------------------------------------------------------------------------------
+.env
+.env*.local
+.env.production
+.env.development
+.env.test
+backend/.env
+frontend/.env*.local
+*.pem
+*.key
+
+# Preserve example environment templates
+!.env.example
+!frontend/.env.example
+!backend/.env.example
+
+# ------------------------------------------------------------------------------
+# Frontend (Next.js / Node / TypeScript)
+# ------------------------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -10,33 +34,87 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# Next.js build outputs
+.next/
+frontend/.next/
+out/
+frontend/out/
+build/
+frontend/build/
+dist/
 
-# next.js
-/.next/
-/out/
+# Testing & Coverage
+coverage/
+frontend/coverage/
 
-# production
-/build
+# TypeScript cache
+*.tsbuildinfo
+next-env.d.ts
+frontend/next-env.d.ts
 
-# misc
-.DS_Store
-*.pem
+# Vercel deployment
+.vercel/
 
-# debug
+# Package manager logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-!.env.example
+# ------------------------------------------------------------------------------
+# Backend (Python / FastAPI / LangGraph / Vector DB)
+# ------------------------------------------------------------------------------
+# Virtual environments
+.venv/
+venv/
+ENV/
+backend/.venv/
+backend/venv/
 
-# vercel
-.vercel
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.installed.cfg
+*.egg
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Testing & Type checking caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local databases, vectors, and uploads
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/chroma/
+backend/data/uploads/
+data/*.db
+data/*.db-journal
+data/chroma/
+data/uploads/
+!backend/data/.gitkeep
+
+# Model weights & HuggingFace caches
+hf_cache/
+/models/
+backend/hf_cache/
+backend/models/
+!backend/app/models/
+!app/models/
+
+# Logs
+*.log
+
+# ------------------------------------------------------------------------------
+# OS & IDE Files
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

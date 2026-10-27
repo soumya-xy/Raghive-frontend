@@ -1,10 +1,21 @@
 {
 	"folders": [
 		{
+			"name": "RAGHive (Root)",
 			"path": "."
 		},
 		{
-			"path": "../Raghive-backend"
+			"name": "Frontend",
+			"path": "frontend"
+		},
+		{
+			"name": "Backend",
+			"path": "backend"
+		},
+		{
+			"name": "Docs",
+			"path": "docs"
 		}
-	]
+	],
+	"settings": {}
 }

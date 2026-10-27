@@ -9,7 +9,7 @@ This service is a sibling of `Raghive-frontend`. The planner node is derived fro
 ## Quick start
 
 ```powershell
-cd D:\down\Raghive-backend
+cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -17,7 +17,7 @@ copy .env.example .env
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-Frontend (`.env.local` in `Raghive-frontend`):
+Frontend (`.env.local` in `frontend/`):
 
 ```
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
@@ -25,7 +25,7 @@ NEXT_PUBLIC_USE_MOCK_API=false
 NEXT_PUBLIC_USE_MOCK_AUTH=true
 ```
 
-Then `pnpm dev` on port 3000.
+Then `pnpm dev` inside `frontend/` on port 3000.
 
 ## Architecture
 
