@@ -29,6 +29,7 @@ export function EvidenceChunkCard({ chunk, isHighlighted = false }: EvidenceChun
           <FileText className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
           <span className="font-mono text-[11px] font-semibold truncate text-ink">
             {chunk.sourceDocument}
+            {chunk.pageNumber ? ` · p.${chunk.pageNumber}` : ""}
           </span>
         </div>
         {chunk.keptForReasoning ? (
@@ -108,6 +109,11 @@ export function EvidenceChunkCard({ chunk, isHighlighted = false }: EvidenceChun
           </div>
         </div>
       </div>
+      {chunk.filterReason && !chunk.keptForReasoning && (
+        <p className="text-[10px] font-mono text-rose-600 dark:text-rose-400">
+          {chunk.filterReason}
+        </p>
+      )}
     </div>
   );
 }

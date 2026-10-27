@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ExtractorTrace } from "@/lib/api/types";
-import { Filter, Eye, EyeOff, Search } from "lucide-react";
+import { Filter, Eye, EyeOff, Search, CheckCircle2, XCircle } from "lucide-react";
 import { EvidenceChunkCard } from "./evidence-chunk-card";
 import { useTraceStore } from "@/lib/store/use-trace-store";
 
@@ -33,10 +33,45 @@ export function ExtractorTraceSection({ trace }: ExtractorTraceSectionProps) {
           </div>
         </div>
 
-        <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/30">
-          {keptChunksCount} / {totalChunks.length} Chunks Kept
-        </span>
+        <div className="flex items-center space-x-2">
+          {typeof trace.evaluationPassed === "boolean" && (
+            <span
+              className={`inline-flex items-center text-[10px] font-mono font-bold px-2 py-1 rounded-full border ${
+                trace.evaluationPassed
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+              }`}
+            >
+              {trace.evaluationPassed ? (
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+              ) : (
+                <XCircle className="w-3 h-3 mr-1" />
+              )}
+              {trace.evaluationPassed ? "PASS" : "FAIL"}
+            </span>
+          )}
+          <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/30">
+            {keptChunksCount} / {totalChunks.length} Chunks Kept
+          </span>
+        </div>
       </div>
+
+      {(trace.hitRate != null || trace.mrr != null || trace.contextPrecision != null) && (
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            ["Hit Rate", trace.hitRate],
+            ["MRR", trace.mrr],
+            ["Ctx Precision", trace.contextPrecision],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="p-2 rounded-lg border border-surface bg-surface text-center">
+              <div className="text-[10px] font-mono text-muted uppercase">{label}</div>
+              <div className="text-sm font-mono font-bold text-teal-700 dark:text-teal-300">
+                {typeof value === "number" ? `${Math.round(value * 100)}%` : "—"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Sub-Queries & Evidence Chunks */}
       <div className="space-y-4">
@@ -74,7 +109,7 @@ export function ExtractorTraceSection({ trace }: ExtractorTraceSectionProps) {
         >
           {showFilteredChunks ? <EyeOff className="w-3.5 h-3.5 text-teal-500" /> : <Eye className="w-3.5 h-3.5 text-teal-500" />}
           <span>
-            {showFilteredChunks ? "Hide" : "Show"} {filteredChunksCount} Filtered Low-Attribution Chunks
+            {showFilteredChunks ? "Hide" : "Show"} {filteredChunksCount} filtered chunks (below relevance threshold)
           </span>
         </button>
       )}

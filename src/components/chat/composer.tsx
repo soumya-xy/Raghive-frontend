@@ -5,6 +5,8 @@ import { Send, Paperclip, Sparkles, StopCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import { useChatStore } from "@/lib/store/use-chat-store";
 import { toast } from "sonner";
+import { ApiClient } from "@/lib/api/client";
+import { useAuth } from "@/lib/hooks/use-auth";
 
 interface ComposerProps {
   onSend: (message: string) => void;
@@ -15,6 +17,8 @@ export function Composer({ onSend, disabled = false }: ComposerProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { isStreaming } = useChatStore();
+  const { idToken } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -44,9 +48,21 @@ export function Composer({ onSend, disabled = false }: ComposerProps) {
   };
 
   const handleAttachClick = () => {
-    toast.info("Document Upload (PyMuPDF Chunking)", {
-      description: "PDF ingestion is active on backend vector database.",
-    });
+    fileRef.current?.click();
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const result = await ApiClient.uploadDocument(file, idToken || undefined);
+      toast.success(`Ingested ${file.name}`, {
+        description: `${result.chunkCount} chunks written to ChromaDB.`,
+      });
+    } catch (err: any) {
+      toast.error(err.message || "Document ingest failed");
+    }
   };
 
   return (
@@ -73,6 +89,13 @@ export function Composer({ onSend, disabled = false }: ComposerProps) {
             >
               <Paperclip className="w-4 h-4" />
             </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.txt,.md"
+              className="hidden"
+              onChange={handleFile}
+            />
             <span className="hidden sm:inline-block text-[11px]">
               Qwen2.5-32B • Glass-Box Mode Active
             </span>

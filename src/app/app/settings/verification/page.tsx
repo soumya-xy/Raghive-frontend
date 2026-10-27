@@ -5,6 +5,8 @@ import { useUIStore } from "@/lib/store/use-ui-store";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { ShieldCheck, Eye, Layers, Sliders } from "lucide-react";
 import { toast } from "sonner";
+import { ApiClient } from "@/lib/api/client";
+import { useAuth } from "@/lib/hooks/use-auth";
 
 export default function VerificationSettingsPage() {
   const {
@@ -16,8 +18,11 @@ export default function VerificationSettingsPage() {
     setShowHeatmapsByDefault,
   } = useUIStore();
 
+  const { idToken } = useAuth();
+
   const handleStrictnessChange = (val: "standard" | "thorough") => {
     setVerificationStrictness(val);
+    ApiClient.patchPreferences({ verificationStrictness: val }, idToken || undefined).catch(() => {});
     toast.success(`Verification strictness set to ${val.toUpperCase()}`);
   };
 

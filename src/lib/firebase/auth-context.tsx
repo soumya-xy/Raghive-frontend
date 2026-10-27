@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { User } from "firebase/auth";
 import { subscribeToAuthState } from "./auth";
-import { USE_MOCK_API } from "../api/mock/mock-mode";
+import { USE_MOCK_AUTH } from "../api/mock/mock-mode";
 
 interface AuthContextType {
   user: User | null;
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // If mock mode or demo key, set mock user as default
-    if (USE_MOCK_API) {
+    if (USE_MOCK_AUTH) {
       setUser(MOCK_USER as User);
       setIdToken("mock_firebase_id_token_raghive_bearer_12345");
       setLoading(false);
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleSignOut = async () => {
-    if (USE_MOCK_API) {
+    if (USE_MOCK_AUTH) {
       setUser(null);
       setIdToken(null);
       return;

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { PlannerTrace } from "@/lib/api/types";
 import { ConfidenceBadge } from "./confidence-badge";
 import { AttentionHeatmap } from "./attention-heatmap";
-import { Compass, RefreshCw, Tag, ChevronDown, ChevronUp, Layers } from "lucide-react";
+import { Compass, RefreshCw, Tag, ChevronDown, ChevronUp, Layers, CheckCircle2, XCircle, MinusCircle, AlertTriangle } from "lucide-react";
 import { Button } from "../ui/button";
 
 interface PlannerTraceSectionProps {
@@ -71,11 +71,51 @@ export function PlannerTraceSection({ trace }: PlannerTraceSectionProps) {
         </div>
       </div>
 
+      {trace.verificationChecks && (
+        <div className="space-y-1.5">
+          <span className="text-[11px] font-mono text-muted uppercase tracking-wider">
+            Independent verification checks
+          </span>
+          {(
+            [
+              ["Entity coverage", trace.verificationChecks.entityCoverage],
+              ["Requirement coverage", trace.verificationChecks.requirementCoverage],
+              ["Self-consistency", trace.verificationChecks.selfConsistency],
+              ["Attention grounding", trace.verificationChecks.attentionXai],
+            ] as const
+          ).map(([label, check]) => {
+            const status = check?.status || "SKIPPED";
+            const Icon =
+              status === "PASS" || status === "STABLE"
+                ? CheckCircle2
+                : status === "FAIL" || status === "UNSTABLE"
+                ? XCircle
+                : status === "WARNING"
+                ? AlertTriangle
+                : MinusCircle;
+            return (
+              <div
+                key={label}
+                className="flex items-start space-x-2 p-2 rounded-lg border border-surface bg-surface text-xs"
+              >
+                <Icon className="w-3.5 h-3.5 mt-0.5 text-amber-500 shrink-0" />
+                <div>
+                  <div className="font-mono font-semibold">
+                    {label} · {status}
+                  </div>
+                  {check?.reason && <p className="text-[11px] text-muted mt-0.5">{check.reason}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Keyword Chips */}
       <div className="space-y-1.5">
         <div className="flex items-center text-[11px] font-mono text-muted uppercase tracking-wider">
           <Tag className="w-3 h-3 mr-1 text-amber-500" />
-          <span>Extracted Keywords (spaCy NER)</span>
+          <span>Reference entities</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {trace.keywords.map((kw, i) => (

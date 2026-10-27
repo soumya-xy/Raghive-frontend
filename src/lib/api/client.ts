@@ -117,7 +117,8 @@ export class ApiClient {
     chatId: string,
     content: string,
     onEvent: (event: StreamEvent) => void,
-    token?: string
+    token?: string,
+    options?: { verificationStrictness?: "standard" | "thorough" }
   ): Promise<void> {
     if (USE_MOCK_API) {
       // 1. Planner Agent Start
@@ -187,24 +188,127 @@ export class ApiClient {
     }
 
     // Real Server Sent Events implementation
-    const response = await fetch(`${BASE_URL}/api/v1/chats/${chatId}/messages`, {
-      method: "POST",
-      headers: await this.getHeaders(token),
-      body: JSON.stringify({ content }),
-    });
+    await this.consumeSse(
+      `${BASE_URL}/api/v1/chats/${chatId}/messages`,
+      {
+        method: "POST",
+        headers: await this.getHeaders(token),
+        body: JSON.stringify({ content, verificationStrictness: options?.verificationStrictness }),
+      },
+      onEvent
+    );
+  }
 
+  static async resumeQueryStream(
+    chatId: string,
+    messageId: string,
+    body: { approvedPlan?: unknown; editedSubQuestions?: unknown[]; regenerate?: boolean },
+    onEvent: (event: StreamEvent) => void,
+    token?: string
+  ): Promise<void> {
+    if (USE_MOCK_API) {
+      onEvent({ type: "agent_status", agent: "planner", status: "done" });
+      onEvent({ type: "done", messageId });
+      return;
+    }
+    await this.consumeSse(
+      `${BASE_URL}/api/v1/chats/${chatId}/messages/${messageId}/resume`,
+      {
+        method: "POST",
+        headers: await this.getHeaders(token),
+        body: JSON.stringify(body),
+      },
+      onEvent
+    );
+  }
+
+  static async getMe(token?: string): Promise<UserProfile> {
+    if (USE_MOCK_API) {
+      return {
+        userId: "usr_raghive_demo_101",
+        email: "researcher@lnmiit.ac.in",
+        displayName: "Dr. Soumya Jain",
+        createdAt: new Date().toISOString(),
+      };
+    }
+    const res = await fetch(`${BASE_URL}/api/v1/users/me`, { headers: await this.getHeaders(token) });
+    if (!res.ok) throw new Error("Failed to fetch profile");
+    return res.json();
+  }
+
+  static async getPreferences(token?: string): Promise<UserPreferences> {
+    if (USE_MOCK_API) {
+      return { verificationStrictness: "thorough", alwaysShowTrace: true, showHeatmapsByDefault: true };
+    }
+    const res = await fetch(`${BASE_URL}/api/v1/users/me/preferences`, {
+      headers: await this.getHeaders(token),
+    });
+    if (!res.ok) throw new Error("Failed to fetch preferences");
+    return res.json();
+  }
+
+  static async patchPreferences(data: UserPreferences, token?: string): Promise<UserPreferences> {
+    if (USE_MOCK_API) {
+      return data;
+    }
+    const res = await fetch(`${BASE_URL}/api/v1/users/me/preferences`, {
+      method: "PATCH",
+      headers: await this.getHeaders(token),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Failed to update preferences");
+    return res.json();
+  }
+
+  static async getTrace(chatId: string, messageId: string, token?: string): Promise<ReasoningTrace> {
+    if (USE_MOCK_API) {
+      return MOCK_TRACE_INCEPTION;
+    }
+    const res = await fetch(`${BASE_URL}/api/v1/chats/${chatId}/messages/${messageId}/trace`, {
+      headers: await this.getHeaders(token),
+    });
+    if (!res.ok) throw new Error("Failed to fetch trace");
+    return res.json();
+  }
+
+  static async uploadDocument(file: File, token?: string): Promise<{ filename: string; chunkCount: number }> {
+    if (USE_MOCK_API) {
+      await delay(400);
+      return { filename: file.name, chunkCount: 8 };
+    }
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${BASE_URL}/api/v1/documents`, { method: "POST", headers, body: form });
+    if (!res.ok) throw new Error("Failed to ingest document");
+    return res.json();
+  }
+
+  private static async consumeSse(
+    url: string,
+    init: RequestInit,
+    onEvent: (event: StreamEvent) => void
+  ): Promise<void> {
+    const response = await fetch(url, init);
+    if (!response.ok) {
+      throw new Error(`Pipeline request failed (${response.status})`);
+    }
     if (!response.body) throw new Error("No response body for SSE stream");
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-
+    let buffer = "";
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value);
-      const lines = chunk.split("\n").filter((l) => l.trim().startsWith("data:"));
-      for (const line of lines) {
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+      for (const part of parts) {
+        const line = part.split("\n").find((l) => l.trim().startsWith("data:"));
+        if (!line) continue;
         try {
-          const json = JSON.parse(line.replace("data:", "").trim());
+          const json = JSON.parse(line.replace(/^data:\s*/, "").trim());
           onEvent(json);
         } catch (e) {
           console.error("Failed to parse SSE event", e);

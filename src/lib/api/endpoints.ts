@@ -8,4 +8,8 @@ export const API_ENDPOINTS = {
   QUERY: "/api/v1/query",
   USER_PREFERENCES: "/api/v1/users/me/preferences",
   USER_ME: "/api/v1/users/me",
+  DOCUMENTS: "/api/v1/documents",
+  HEALTH: "/api/v1/health",
+  RESUME: (chatId: string, messageId: string) =>
+    `/api/v1/chats/${chatId}/messages/${messageId}/resume`,
 };
