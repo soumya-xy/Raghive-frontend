@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import ChatRow, DocumentRow, MessageRow, UserRow
@@ -45,7 +45,9 @@ def ensure_user(
     if email and row.email != email:
         row.email = email
         changed = True
-    if display_name and row.display_name != display_name:
+    # Only adopt the identity-provider name while the user still has the default.
+    # Otherwise every request would overwrite a name saved via PATCH /users/me.
+    if display_name and row.display_name in ("", "Researcher") and row.display_name != display_name:
         row.display_name = display_name
         changed = True
     if avatar_url and row.avatar_url != avatar_url:
@@ -77,7 +79,10 @@ def get_preferences(row: UserRow) -> UserPreferences:
 
 def patch_preferences(db: Session, row: UserRow, patch: UserPreferences) -> UserPreferences:
     current = get_preferences(row).model_dump(exclude_none=True)
-    current.update(patch.model_dump(exclude_none=True))
+    # exclude_unset: only fields the client actually sent. Otherwise a PATCH that
+    # changes only verificationStrictness would also reset theme/density/toggles
+    # to their model defaults.
+    current.update(patch.model_dump(exclude_unset=True, exclude_none=True))
     row.preferences_json = json.dumps(current)
     db.commit()
     return UserPreferences.model_validate(current)
@@ -212,6 +217,7 @@ def update_message(
     pending: Optional[bool] = None,
     pipeline_state: Optional[dict[str, Any]] = None,
     faithfulness: Optional[float] = None,
+    clear_pipeline_state: bool = False,
 ) -> MessageRow:
     if content is not None:
         row.content = content
@@ -219,7 +225,11 @@ def update_message(
         row.trace_json = json.dumps(trace)
     if pending is not None:
         row.pending = pending
-    if pipeline_state is not None:
+    if clear_pipeline_state:
+        # A finished (or failed) run must drop its HITL checkpoint, otherwise
+        # the message could be resumed again after it already completed.
+        row.pipeline_state_json = None
+    elif pipeline_state is not None:
         row.pipeline_state_json = json.dumps(pipeline_state)
     if faithfulness is not None:
         row.faithfulness = faithfulness
@@ -243,6 +253,26 @@ def record_document(db: Session, user_id: str, filename: str, chunk_count: int) 
     db.add(row)
     db.commit()
     return row
+
+
+def update_profile(db: Session, row: UserRow, display_name: str) -> UserRow:
+    row.display_name = display_name
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def delete_user_data(db: Session, row: UserRow) -> None:
+    """Delete the user's chats, messages, document records and profile row.
+
+    Corpus chunks in Chroma are global (not per-user), so they are not removed here.
+    """
+    chat_ids = select(ChatRow.id).where(ChatRow.user_id == row.id)
+    db.execute(delete(MessageRow).where(MessageRow.chat_id.in_(chat_ids)))
+    db.execute(delete(ChatRow).where(ChatRow.user_id == row.id))
+    db.execute(delete(DocumentRow).where(DocumentRow.user_id == row.id))
+    db.delete(row)
+    db.commit()
 
 
 def chat_count(db: Session, user_id: str) -> int:

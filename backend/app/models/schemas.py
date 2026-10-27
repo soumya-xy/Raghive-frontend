@@ -72,3 +72,7 @@ class AuthSessionBody(BaseModel):
     email: Optional[str] = None
     displayName: Optional[str] = None
     avatarUrl: Optional[str] = None
+
+
+class UpdateProfileBody(BaseModel):
+    displayName: Optional[str] = None

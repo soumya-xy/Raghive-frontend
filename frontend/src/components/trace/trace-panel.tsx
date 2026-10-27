@@ -15,8 +15,19 @@ interface TracePanelProps {
   isLoading?: boolean;
 }
 
+/** A paused (HITL) run only has a planner trace; the other stages never ran. */
+function StageNotRun({ label }: { label: string }) {
+  return (
+    <div className="p-3 rounded-lg border border-surface bg-surface text-xs font-mono text-muted">
+      {label} has not run for this message (pipeline paused for human review).
+    </div>
+  );
+}
+
 export function TracePanel({ trace, isLoading = false }: TracePanelProps) {
   const { toggleTracePanel, activeTraceTab, setActiveTraceTab } = useUIStore();
+  // Stored traces for paused runs carry null for stages that did not run.
+  const { planner, extractor, qa } = (trace ?? {}) as Partial<ReasoningTrace>;
 
   if (isLoading) {
     return (
@@ -86,14 +97,17 @@ export function TracePanel({ trace, isLoading = false }: TracePanelProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
         {activeTraceTab === "all" && (
           <>
-            <PlannerTraceSection trace={trace.planner} />
-            <ExtractorTraceSection trace={trace.extractor} />
-            <QATraceSection trace={trace.qa} />
+            {planner ? <PlannerTraceSection trace={planner} /> : <StageNotRun label="Planner" />}
+            {extractor ? <ExtractorTraceSection trace={extractor} /> : <StageNotRun label="Extractor" />}
+            {qa ? <QATraceSection trace={qa} /> : <StageNotRun label="QA / Reasoning" />}
           </>
         )}
-        {activeTraceTab === "planner" && <PlannerTraceSection trace={trace.planner} />}
-        {activeTraceTab === "extractor" && <ExtractorTraceSection trace={trace.extractor} />}
-        {activeTraceTab === "qa" && <QATraceSection trace={trace.qa} />}
+        {activeTraceTab === "planner" &&
+          (planner ? <PlannerTraceSection trace={planner} /> : <StageNotRun label="Planner" />)}
+        {activeTraceTab === "extractor" &&
+          (extractor ? <ExtractorTraceSection trace={extractor} /> : <StageNotRun label="Extractor" />)}
+        {activeTraceTab === "qa" &&
+          (qa ? <QATraceSection trace={qa} /> : <StageNotRun label="QA / Reasoning" />)}
       </div>
     </aside>
   );

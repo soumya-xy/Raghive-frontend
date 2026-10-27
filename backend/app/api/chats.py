@@ -146,9 +146,30 @@ def _persist_terminal(chat_id: str, user_id: str, assistant_id: str, event: dict
                 content=answer,
                 trace=trace,
                 pending=False,
-                pipeline_state=None,
+                clear_pipeline_state=True,
                 faithfulness=faith,
             )
+    finally:
+        db.close()
+
+
+def _persist_failure(chat_id: str, user_id: str, assistant_id: str, message: str) -> None:
+    """Close out an assistant message whose pipeline crashed, so it is not stuck pending."""
+    db = SessionLocal()
+    try:
+        chat = crud.get_chat(db, user_id, chat_id)
+        if not chat:
+            return
+        row = crud.get_message(db, chat_id, assistant_id)
+        if not row:
+            return
+        crud.update_message(
+            db,
+            row,
+            content=f"Pipeline error: {message}",
+            pending=False,
+            clear_pipeline_state=True,
+        )
     finally:
         db.close()
 
@@ -180,6 +201,7 @@ async def _sse_pipeline(
                 event = {k: v for k, v in event.items() if k != "state"}
             yield sse_pack(event)
     except Exception as exc:
+        _persist_failure(chat_id, user_id, assistant_id, str(exc))
         yield sse_pack({"type": "error", "message": str(exc)})
 
 

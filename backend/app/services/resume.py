@@ -51,4 +51,6 @@ def apply_resume(state: GraphState, body: dict[str, Any]) -> GraphState:
     report["flags"] = list(report.get("flags") or []) + ["human approved plan as-is"]
     report["overall_status"] = "PASS"
     state["verification_report"] = report
+    # Same as the edit path: a human reviewed a failed plan, so it is MEDIUM at best.
+    state["confidence_flag"] = "MEDIUM"
     return state

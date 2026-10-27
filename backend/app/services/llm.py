@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Iterator, Optional
 
 from app.config import get_settings
@@ -41,10 +42,21 @@ def get_chat_llm():
     return _chat_llm
 
 
+_LLM_PROBE_TTL_S = 30.0
+_llm_checked_at = 0.0
+
+
 def llm_available() -> bool:
-    global _llm_reachable
-    if _llm_reachable is not None:
+    """Probe the inference server; cache the answer briefly.
+
+    The result is re-checked every _LLM_PROBE_TTL_S seconds so that starting vLLM
+    after the API is running is picked up without restarting the backend.
+    """
+    global _llm_reachable, _llm_checked_at
+    now = time.monotonic()
+    if _llm_reachable is not None and now - _llm_checked_at < _LLM_PROBE_TTL_S:
         return _llm_reachable
+    _llm_checked_at = now
     settings = get_settings()
     try:
         import httpx

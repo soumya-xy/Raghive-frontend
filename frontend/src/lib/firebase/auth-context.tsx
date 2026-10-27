@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { User } from "firebase/auth";
-import { subscribeToAuthState } from "./auth";
+import { subscribeToIdToken } from "./auth";
 import { USE_MOCK_AUTH } from "../api/mock/mock-mode";
 
 interface AuthContextType {
@@ -43,19 +43,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const unsubscribe = subscribeToAuthState(async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        const token = await currentUser.getIdToken();
-        setIdToken(token);
-      } else {
-        setUser(null);
-        setIdToken(null);
-      }
+    // onIdTokenChanged also fires on Firebase's periodic token refresh (tokens expire hourly).
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = subscribeToIdToken(async (currentUser) => {
+        if (currentUser) {
+          setUser(currentUser);
+          const token = await currentUser.getIdToken();
+          setIdToken(token);
+        } else {
+          setUser(null);
+          setIdToken(null);
+        }
+        setLoading(false);
+      });
+    } catch (err) {
+      // Firebase env vars missing (NEXT_PUBLIC_FIREBASE_*). Show the signed-out state
+      // so the user lands on sign-in with an explanation, instead of a crashed page.
+      console.error(err);
       setLoading(false);
-    });
+    }
 
-    return () => unsubscribe();
+    return () => unsubscribe?.();
   }, []);
 
   const handleSignOut = async () => {

@@ -1,5 +1,10 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
+
+// Firebase is initialised lazily. `getAuth()` throws `auth/invalid-api-key` when the
+// NEXT_PUBLIC_FIREBASE_* variables are missing, so calling it at module load would
+// crash every page — including the mock-auth demo that does not use Firebase at all.
+// Only code paths that really need Firebase call getFirebaseAuth().
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,6 +16,20 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export default app;
+let _auth: Auth | null = null;
+
+function getFirebaseApp(): FirebaseApp {
+  return getApps().length ? getApp() : initializeApp(firebaseConfig);
+}
+
+export function getFirebaseAuth(): Auth {
+  if (!_auth) {
+    if (!firebaseConfig.apiKey) {
+      throw new Error(
+        "Firebase is not configured. Set NEXT_PUBLIC_FIREBASE_* in frontend/.env.local, or use NEXT_PUBLIC_USE_MOCK_AUTH=true."
+      );
+    }
+    _auth = getAuth(getFirebaseApp());
+  }
+  return _auth;
+}

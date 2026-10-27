@@ -7,6 +7,7 @@ import { HexMark } from "../shared/hex-mark";
 import { useUIStore } from "@/lib/store/use-ui-store";
 import { useChats } from "@/lib/hooks/use-chats";
 import { useAuth } from "@/lib/hooks/use-auth";
+import { useProfile } from "@/lib/hooks/use-profile";
 import {
   Plus,
   Search,
@@ -49,7 +50,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { sidebarOpen, toggleSidebar } = useUIStore();
   const { chats, createChat, updateChat, deleteChat } = useChats();
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
+  const { displayName } = useProfile();
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleNewChat = async () => {
@@ -104,6 +106,24 @@ export function AppSidebar() {
           <Plus className="w-4 h-4" />
           {sidebarOpen && <span>New Conversation</span>}
         </Button>
+      </div>
+
+      {/* History page (was implemented but not reachable from the UI) */}
+      <div className="px-3 pb-2">
+        <Link
+          href="/app/history"
+          className={cn(
+            "flex items-center space-x-2 px-2.5 py-2 rounded-xl text-xs font-medium transition-colors",
+            pathname === "/app/history"
+              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+              : "text-ink hover:bg-amber-500/10 hover:text-amber-500",
+            !sidebarOpen && "justify-center"
+          )}
+          title="History"
+        >
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          {sidebarOpen && <span>History</span>}
+        </Link>
       </div>
 
       {/* Search Bar */}
@@ -175,12 +195,12 @@ export function AppSidebar() {
           <DropdownMenuTrigger asChild>
             <button className="w-full flex items-center space-x-2.5 p-1.5 rounded-xl hover:bg-amber-500/10 cursor-pointer transition-colors text-left focus:outline-none">
               <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 font-mono font-bold text-xs">
-                {user?.displayName ? user.displayName[0] : "R"}
+                {displayName ? displayName[0] : "R"}
               </div>
               {sidebarOpen && (
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-ink truncate">
-                    {user?.displayName || "Research User"}
+                    {displayName || "Research User"}
                   </p>
                   <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded">
                     Academic Plan

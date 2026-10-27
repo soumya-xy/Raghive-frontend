@@ -95,16 +95,28 @@ async def stream_from_extractor(state: GraphState) -> AsyncIterator[Event]:
         yield event
 
 
+async def _iter_blocking(factory) -> AsyncIterator[Any]:
+    """Pull items from a blocking generator one at a time, off the event loop.
+
+    Unlike collecting the whole generator first, this yields each token as soon
+    as the LLM produces it, so the SSE stream is genuinely incremental.
+    """
+    import asyncio
+
+    loop = asyncio.get_running_loop()
+    iterator = iter(factory())
+    sentinel = object()
+    while True:
+        item = await loop.run_in_executor(None, next, iterator, sentinel)
+        if item is sentinel:
+            return
+        yield item
+
+
 async def stream_from_qa(state: GraphState) -> AsyncIterator[Event]:
     yield {"type": "agent_status", "agent": "qa", "status": "started"}
     pieces: list[str] = []
-    import asyncio
-
-    def collect() -> list[str]:
-        return list(stream_answer(state))
-
-    tokens = await asyncio.to_thread(collect)
-    for tok in tokens:
+    async for tok in _iter_blocking(lambda: stream_answer(state)):
         pieces.append(tok)
         yield {"type": "token", "data": tok}
     answer = "".join(pieces).strip()

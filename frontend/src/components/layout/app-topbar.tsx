@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { usePathname } from "next/navigation";
 import { SidebarTrigger } from "./app-sidebar";
 import { useUIStore } from "@/lib/store/use-ui-store";
 import { Layers, ShieldCheck, Edit3, Check, X } from "lucide-react";
@@ -12,15 +13,29 @@ interface AppTopbarProps {
   currentTitle?: string;
 }
 
-export function AppTopbar({ chatId, currentTitle = "Christopher Nolan Inception & Latest Film" }: AppTopbarProps) {
+export function AppTopbar({ chatId: chatIdProp, currentTitle: titleProp }: AppTopbarProps) {
+  const pathname = usePathname();
   const { tracePanelOpen, toggleTracePanel } = useUIStore();
-  const { updateChat } = useChats();
+  const { chats, updateChat } = useChats();
+
+  // Derive the active chat from the route (/app/chat/[chatId]) when not passed explicitly.
+  const routeMatch = pathname?.match(/^\/app\/chat\/([^/]+)$/);
+  const routeChatId = routeMatch && routeMatch[1] !== "new" ? routeMatch[1] : undefined;
+  const chatId = chatIdProp ?? routeChatId;
+  const activeChat = chatId ? chats.find((c) => c.id === chatId) : undefined;
+  const currentTitle = titleProp ?? activeChat?.title ?? "New Conversation";
+
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(currentTitle);
 
+  const handleStartEditing = () => {
+    setTitle(currentTitle);
+    setIsEditing(true);
+  };
+
   const handleSaveTitle = async () => {
     setIsEditing(false);
-    if (chatId && title.trim() !== currentTitle) {
+    if (chatId && title.trim() && title.trim() !== currentTitle) {
       await updateChat({ chatId, data: { title: title.trim() } });
     }
   };
@@ -51,12 +66,15 @@ export function AppTopbar({ chatId, currentTitle = "Christopher Nolan Inception 
             </div>
           ) : (
             <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center space-x-1.5 font-display font-semibold text-xs md:text-sm text-ink truncate hover:text-amber-500 transition-colors group cursor-pointer"
-              title="Click to rename chat"
+              onClick={handleStartEditing}
+              disabled={!chatId}
+              className="flex items-center space-x-1.5 font-display font-semibold text-xs md:text-sm text-ink truncate hover:text-amber-500 transition-colors group cursor-pointer disabled:cursor-default disabled:hover:text-ink"
+              title={chatId ? "Click to rename chat" : undefined}
             >
               <span className="truncate">{currentTitle}</span>
-              <Edit3 className="w-3 h-3 text-muted group-hover:text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+              {chatId && (
+                <Edit3 className="w-3 h-3 text-muted group-hover:text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
             </button>
           )}
         </div>

@@ -260,6 +260,39 @@ export class ApiClient {
     return res.json();
   }
 
+  static async updateProfile(displayName: string, token?: string): Promise<UserProfile> {
+    if (USE_MOCK_API) {
+      await delay(300);
+      return {
+        userId: "usr_raghive_demo_101",
+        email: "researcher@lnmiit.ac.in",
+        displayName,
+        createdAt: new Date().toISOString(),
+      };
+    }
+    const res = await fetch(`${BASE_URL}/api/v1/users/me`, {
+      method: "PATCH",
+      headers: await this.getHeaders(token),
+      body: JSON.stringify({ displayName }),
+    });
+    if (!res.ok) throw new Error("Failed to update profile");
+    return res.json();
+  }
+
+  /** Deletes the user's chats, messages and profile on the backend. Firebase account deletion is separate. */
+  static async deleteAccountData(token?: string): Promise<void> {
+    if (USE_MOCK_API) {
+      await delay(400);
+      MOCK_CHATS.splice(0, MOCK_CHATS.length);
+      return;
+    }
+    const res = await fetch(`${BASE_URL}/api/v1/users/me`, {
+      method: "DELETE",
+      headers: await this.getHeaders(token),
+    });
+    if (!res.ok) throw new Error("Failed to delete account data");
+  }
+
   static async getTrace(chatId: string, messageId: string, token?: string): Promise<ReasoningTrace> {
     if (USE_MOCK_API) {
       return MOCK_TRACE_INCEPTION;
