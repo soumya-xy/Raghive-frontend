@@ -16,8 +16,9 @@ numpy>=1.26.0
 yake>=0.4.8
 pymupdf>=1.24.0
 firebase-admin>=6.6.0
+sentence-transformers>=3.0.0
 
-# Optional ML extras (install when a GPU / local models are available):
-#   pip install torch transformers sentence-transformers gliner accelerate
+# Optional ML extras (install when a GPU is available):
+#   pip install gliner accelerate
 #   python -m spacy download en_core_web_sm
 # bitsandbytes is Linux/CUDA only — skip on Windows.

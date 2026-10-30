@@ -11,6 +11,7 @@ This is what makes "kept because it actually matters" distinct from
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -18,19 +19,24 @@ import numpy as np
 
 from app.services.embeddings import cosine01, embed_query, embed_texts
 
+logger = logging.getLogger(__name__)
 
-def _minmax(values: list[float]) -> list[float]:
+
+def _calibrate_signals(values: list[float], floor: float = 0.25) -> list[float]:
     if not values:
         return []
     lo, hi = min(values), max(values)
-    if hi - lo < 1e-9:
-        return [0.5 for _ in values]
-    return [(v - lo) / (hi - lo) for v in values]
+    if hi - lo < 1e-6:
+        return [float(np.clip(v if 0.0 <= v <= 1.0 else 0.5, floor, 1.0)) for v in values]
+    # Soft relative scaling that preserves a floor rather than zeroing out lower-ranked chunks
+    return [float(np.clip(floor + (1.0 - floor) * ((v - lo) / (hi - lo)), 0.0, 1.0)) for v in values]
 
 
 def _lexical_overlap(query: str, text: str) -> float:
-    q = set(re.findall(r"[a-z0-9]{3,}", query.lower()))
-    t = set(re.findall(r"[a-z0-9]{3,}", text.lower()))
+    # Match words of 3+ alphanumeric characters, excluding very common stop words
+    stopwords = {"the", "and", "for", "with", "that", "this", "from", "are", "was", "were", "what", "how", "why"}
+    q = {w for w in re.findall(r"[a-z0-9]{3,}", query.lower()) if w not in stopwords}
+    t = {w for w in re.findall(r"[a-z0-9]{3,}", text.lower()) if w not in stopwords}
     if not q:
         return 0.0
     return len(q & t) / len(q)
@@ -42,13 +48,14 @@ def gradient_signals(query: str, chunks: list[dict[str, Any]], query_emb: np.nda
     SentenceTransformer exposes parameters; otherwise use a cosine×lexical proxy.
     """
     try:
-        return _encoder_gradients(query, [c["text"] for c in chunks])
-    except Exception:
+        return _encoder_gradients(query, [str(c.get("text", "")) for c in chunks])
+    except Exception as exc:
+        logger.debug("Encoder gradient pass using proxy fallback: %s", exc)
         scores = []
         for i, chunk in enumerate(chunks):
             sim = cosine01(query_emb, chunk_embs[i])
-            lex = _lexical_overlap(query, chunk["text"])
-            scores.append(0.65 * sim + 0.35 * lex)
+            lex = _lexical_overlap(query, str(chunk.get("text", "")))
+            scores.append(float(np.clip(0.65 * sim + 0.35 * lex, 0.0, 1.0)))
         return scores
 
 
@@ -61,15 +68,19 @@ def _encoder_gradients(query: str, texts: list[str]) -> list[float]:
 
     model = _embedder
     model.eval()
-    scores = []
+    scores: list[float] = []
+
+    # Detect device
+    device = getattr(model, "device", "cpu")
     q_tok = model.tokenize([query])
-    q_tok = {k: v.to(model.device) if hasattr(v, "to") else v for k, v in q_tok.items()}
+    q_tok = {k: v.to(device) if hasattr(v, "to") else v for k, v in q_tok.items()}
+
     with torch.enable_grad():
         q_emb = model.forward(q_tok)["sentence_embedding"]
         q_emb = torch.nn.functional.normalize(q_emb, p=2, dim=1)
         for text in texts:
             t_tok = model.tokenize([text])
-            t_tok = {k: v.to(model.device) if hasattr(v, "to") else v for k, v in t_tok.items()}
+            t_tok = {k: v.to(device) if hasattr(v, "to") else v for k, v in t_tok.items()}
             for v in t_tok.values():
                 if hasattr(v, "requires_grad"):
                     v.requires_grad_(False)
@@ -92,7 +103,7 @@ def loo_signals(query_emb: np.ndarray, chunk_embs: np.ndarray) -> list[float]:
         return [1.0]
     full = chunk_embs.mean(axis=0)
     full_sim = cosine01(query_emb, full)
-    out = []
+    out: list[float] = []
     for i in range(n):
         mask = np.ones(n, dtype=bool)
         mask[i] = False
@@ -106,11 +117,12 @@ def dual_score(query: str, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]
     if not chunks:
         return []
     query_emb = embed_query(query)
-    chunk_embs = embed_texts([c["text"] for c in chunks])
+    chunk_embs = embed_texts([str(c.get("text", "")) for c in chunks])
     sims = [cosine01(query_emb, chunk_embs[i]) for i in range(len(chunks))]
-    grads = _minmax(gradient_signals(query, chunks, query_emb, chunk_embs))
-    loos = _minmax(loo_signals(query_emb, chunk_embs))
-    scored = []
+    raw_grads = gradient_signals(query, chunks, query_emb, chunk_embs)
+    grads = _calibrate_signals(raw_grads, floor=0.30)
+    loos = _calibrate_signals(loo_signals(query_emb, chunk_embs), floor=0.25)
+    scored: list[dict[str, Any]] = []
     for i, chunk in enumerate(chunks):
         a_ens = 0.5 * grads[i] + 0.5 * loos[i]
         item = dict(chunk)

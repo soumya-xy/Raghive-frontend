@@ -133,7 +133,7 @@ export class ApiClient {
           ? MOCK_TRACE_MEDIUM
           : MOCK_TRACE_INCEPTION;
 
-      if (trace.planner.retried) {
+      if (trace.planner?.retried) {
         onEvent({ type: "agent_status", agent: "planner", status: "retrying" });
         await delay(500);
       }
@@ -154,7 +154,7 @@ export class ApiClient {
       await delay(400);
 
       // Stream answer text token by token
-      const tokens = trace.qa.answer.split(" ");
+      const tokens = trace.qa?.answer ? trace.qa.answer.split(" ") : [];
       for (const tok of tokens) {
         onEvent({ type: "token", data: tok + " " });
         await delay(40);
@@ -177,7 +177,7 @@ export class ApiClient {
         {
           id: newMsgId,
           role: "assistant",
-          content: trace.qa.answer,
+          content: trace.qa?.answer || "",
           createdAt: new Date().toISOString(),
           trace,
         }

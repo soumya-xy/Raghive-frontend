@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import re
 from typing import Optional, Sequence
@@ -9,14 +10,18 @@ import numpy as np
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 _embedder = None
 _embedder_name = "hashing"
-_dim = 384
+_dim = 1024
 
 
 def embedding_backend() -> str:
-    _ensure_embedder()
-    return _embedder_name
+    if _embedder_name != "hashing":
+        return _embedder_name
+    settings = get_settings()
+    return settings.embedding_model or "BAAI/bge-m3"
 
 
 def _ensure_embedder() -> None:
@@ -24,19 +29,43 @@ def _ensure_embedder() -> None:
     if _embedder is not None:
         return
     settings = get_settings()
-    for model_name in (settings.embedding_model, "BAAI/bge-small-en-v1.5", "all-MiniLM-L6-v2"):
+
+    try:
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:
+        device = "cpu"
+
+    models_to_try = [
+        settings.embedding_model or "BAAI/bge-m3",
+        "BAAI/bge-m3",
+        "BAAI/bge-small-en-v1.5",
+        "all-MiniLM-L6-v2",
+    ]
+
+    for model_name in models_to_try:
         try:
             from sentence_transformers import SentenceTransformer
 
-            _embedder = SentenceTransformer(model_name)
+            _embedder = SentenceTransformer(model_name, device=device)
             _embedder_name = model_name
-            _dim = int(_embedder.get_sentence_embedding_dimension())
+            if hasattr(_embedder, "get_embedding_dimension"):
+                _dim = int(_embedder.get_embedding_dimension())
+            elif hasattr(_embedder, "get_sentence_embedding_dimension"):
+                _dim = int(_embedder.get_sentence_embedding_dimension())
+            else:
+                _dim = 1024
+            logger.info("Loaded embedding model %s on %s with dim %d", model_name, device, _dim)
             return
-        except Exception:
+        except Exception as exc:
+            logger.warning("Could not load embedding model %s: %s", model_name, exc)
             continue
+
     _embedder = "hash"
     _embedder_name = "hashing-fallback"
-    _dim = 384
+    _dim = 1024
+    logger.error("All neural embedding models failed to load. Falling back to 1024-dim hashing.")
 
 
 def _hash_embed(text: str) -> np.ndarray:
@@ -59,7 +88,12 @@ def embed_texts(texts: Sequence[str]) -> np.ndarray:
         return np.zeros((0, _dim), dtype=np.float32)
     if _embedder == "hash":
         return np.stack([_hash_embed(t) for t in texts], axis=0)
-    vectors = _embedder.encode(list(texts), normalize_embeddings=True, show_progress_bar=False)
+
+    vectors = _embedder.encode(
+        list(texts),
+        normalize_embeddings=True,
+        show_progress_bar=False,
+    )
     return np.asarray(vectors, dtype=np.float32)
 
 

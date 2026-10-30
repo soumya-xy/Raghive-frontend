@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import logging
+import re
 from typing import Any
 
 from app.models.state import GraphState, PlanSteps
@@ -16,6 +19,8 @@ from app.services.verification import (
 )
 from app.services.xai_verifier import verify_planner_focus
 
+logger = logging.getLogger(__name__)
+
 PLANNER_SYSTEM_PROMPT = """You are a query decomposition expert.
 Break the user query into a dependency graph of sub-questions.
 Think step by step.
@@ -27,16 +32,44 @@ That score is a routing hint only — downstream verification will not use it as
 
 
 def generate_plan(query: str, llm_client) -> PlanSteps:
-    structured_llm = llm_client.with_structured_output(PlanSteps)
-    response = structured_llm.invoke(
-        [
-            {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
-            {"role": "user", "content": query},
-        ]
+    # Strategy 1: LangChain structured output
+    try:
+        structured_llm = llm_client.with_structured_output(PlanSteps)
+        response = structured_llm.invoke(
+            [
+                {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+                {"role": "user", "content": query},
+            ]
+        )
+        if isinstance(response, PlanSteps):
+            return response
+        return PlanSteps.model_validate(response)
+    except Exception as exc:
+        logger.warning("with_structured_output failed: %s; falling back to JSON completion", exc)
+
+    # Strategy 2: Direct JSON prompt fallback for Groq / OpenAI-compatible models
+    from app.services.llm import chat_complete
+
+    json_prompt = (
+        f"{PLANNER_SYSTEM_PROMPT}\n\n"
+        "Return ONLY a JSON object with this exact structure:\n"
+        "{\n"
+        f'  "original_query": {json.dumps(query)},\n'
+        '  "sub_questions": [\n'
+        '    {"step_id": 1, "question": "...", "depends_on": [], "search_keywords": ["..."]}\n'
+        '  ],\n'
+        '  "chain_of_thought": "...",\n'
+        '  "initial_confidence": 0.8\n'
+        "}\n\n"
+        f"User query: {query}"
     )
-    if isinstance(response, PlanSteps):
-        return response
-    return PlanSteps.model_validate(response)
+    raw = chat_complete("You are an expert query decomposer that outputs valid JSON only.", json_prompt)
+    clean = raw.strip()
+    if clean.startswith("```"):
+        clean = re.sub(r"^```(?:json)?", "", clean).strip()
+        if clean.endswith("```"):
+            clean = clean[:-3].strip()
+    return PlanSteps.model_validate_json(clean)
 
 
 def _heuristic_plan(query: str) -> PlanSteps:
@@ -63,8 +96,6 @@ def _heuristic_plan(query: str) -> PlanSteps:
 
 
 def re_split_questions(query: str) -> list[str]:
-    import re
-
     chunks = re.split(r"\s+and\s+|\?\s+", query, flags=re.I)
     return [c.strip(" ?") for c in chunks if len(c.strip(" ?")) > 6]
 
@@ -73,8 +104,8 @@ def _safe_generate(query: str) -> PlanSteps:
     if llm_available():
         try:
             return generate_plan(query, get_chat_llm())
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("LLM plan generation error: %s; falling back to heuristic", exc)
     from app.config import get_settings
 
     if not get_settings().raghive_allow_heuristic_llm:
@@ -86,7 +117,7 @@ def _plan_text(plan: PlanSteps) -> str:
     return plan.chain_of_thought + " " + " ".join(sq.question for sq in plan.sub_questions)
 
 
-def _run_suite(query: str, plan: PlanSteps, reference_entities: list[dict[str, Any]], strictness: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def _run_suite(query: str, plan: PlanSteps, reference_entities: list[dict[str, Any]], strictness: str) -> tuple[dict[str, Any], dict[str, Any], float, str]:
     thr = get_thresholds(strictness)
     entity = entity_coverage_check(reference_entities, plan)
     requirement = requirement_coverage_check(query, plan)

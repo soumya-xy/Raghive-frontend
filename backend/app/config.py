@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     xai_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct"
 
     embedding_model: str = "BAAI/bge-m3"
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_model: str = "BAAI/bge-reranker-v2-gemma"
     chroma_path: str = str(ROOT_DIR / "data" / "chroma")
     chroma_collection: str = "raghive_chunks"
     seed_on_startup: bool = True

@@ -12,9 +12,9 @@ from app.services.llm import chat_complete, chat_stream, llm_available
 from app.services.thresholds import get_thresholds
 
 QA_SYSTEM = """You are the RAGHive QA/Reasoning agent.
-Answer using ONLY the provided evidence chunks. Cite chunk ids in your reasoning but write a fluent final answer.
-If evidence is missing or contradictory, say so clearly and hedge.
-Do not invent facts that are not in the evidence."""
+Provide a clear, accurate, and direct answer to the user's question using ONLY the provided evidence chunks.
+Synthesize relevant details across the chunks. Cite sources or chunk references where appropriate.
+If the evidence does not contain enough information to fully answer, state what is known from the evidence and what is missing."""
 
 
 def _plan_summary(plan: Optional[PlanSteps]) -> str:
@@ -32,8 +32,8 @@ def _build_user_prompt(state: GraphState, query_override: Optional[str] = None) 
     return (
         f"User question: {query}\n\n"
         f"{_plan_summary(state.get('plan'))}\n\n"
-        f"Evidence:\n{context}\n\n"
-        "Write the final answer as plain prose."
+        f"Evidence chunks:\n{context}\n\n"
+        "Provide a direct, complete, and grounded answer to the user question based on the evidence above."
     )
 
 
@@ -111,10 +111,16 @@ def _faithfulness(answer: str, evidence: str, keywords: list[str]) -> float:
 
 
 def _lexical_faithfulness(answer: str, evidence: str) -> float:
-    a = set(re.findall(r"[a-z0-9]{3,}", answer.lower()))
-    e = set(re.findall(r"[a-z0-9]{3,}", evidence.lower()))
+    stopwords = {
+        "the", "and", "that", "this", "with", "from", "for", "are", "was", "were",
+        "been", "have", "has", "had", "they", "their", "which", "what", "where",
+        "when", "will", "would", "could", "should", "also", "then", "into", "over",
+        "such", "than", "some", "more", "most", "about", "above", "after", "again",
+    }
+    a = {w for w in re.findall(r"[a-z0-9]{3,}", answer.lower()) if w not in stopwords}
+    e = {w for w in re.findall(r"[a-z0-9]{3,}", evidence.lower()) if w not in stopwords}
     if not a:
-        return 0.0
+        return 0.5
     return float(np.clip(len(a & e) / len(a), 0.0, 1.0))
 
 

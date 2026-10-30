@@ -58,9 +58,9 @@ export interface QATrace {
 }
 
 export interface ReasoningTrace {
-  planner: PlannerTrace;
-  extractor: ExtractorTrace;
-  qa: QATrace;
+  planner: PlannerTrace | null;
+  extractor: ExtractorTrace | null;
+  qa: QATrace | null;
 }
 
 export interface StreamEvent {

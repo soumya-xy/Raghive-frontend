@@ -115,6 +115,15 @@ def retrieved_doc_to_chunk(doc: dict[str, Any]) -> dict[str, Any]:
         chunk["pageNumber"] = int(doc["page"])
     if doc.get("filter_reason"):
         chunk["filterReason"] = doc["filter_reason"]
+    if doc.get("rerank_score") is not None:
+        chunk["rerankScore"] = _finite(doc["rerank_score"])
+    if doc.get("composite_score") is not None:
+        chunk["compositeScore"] = _finite(doc["composite_score"])
+    raw_tbl = doc.get("raw_table_json")
+    if not raw_tbl and isinstance(doc.get("metadata"), dict):
+        raw_tbl = doc["metadata"].get("raw_table_json")
+    if raw_tbl:
+        chunk["rawTableJson"] = raw_tbl
     return chunk
 
 
