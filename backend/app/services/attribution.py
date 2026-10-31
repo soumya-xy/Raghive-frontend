@@ -47,6 +47,16 @@ def gradient_signals(query: str, chunks: list[dict[str, Any]], query_emb: np.nda
     Prefer a real gradient pass through the embedding encoder when the loaded
     SentenceTransformer exposes parameters; otherwise use a cosine×lexical proxy.
     """
+    from app.config import get_settings
+
+    if get_settings().raghive_mode == "lite":
+        scores = []
+        for i, chunk in enumerate(chunks):
+            sim = cosine01(query_emb, chunk_embs[i])
+            lex = _lexical_overlap(query, str(chunk.get("text", "")))
+            scores.append(float(np.clip(0.65 * sim + 0.35 * lex, 0.0, 1.0)))
+        return scores
+
     try:
         return _encoder_gradients(query, [str(c.get("text", "")) for c in chunks])
     except Exception as exc:

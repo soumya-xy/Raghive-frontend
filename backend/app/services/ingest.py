@@ -106,6 +106,139 @@ def _table_to_embedding_text(parsed: dict[str, Any]) -> str:
     return "\n".join(lines) if lines else parsed.get("raw", "")
 
 
+def clean_document_text(text: str) -> str:
+    """Normalize raw document/PDF text, fixing separated numbering, isolated bullets, and spurious whitespace."""
+    if not text:
+        return ""
+    # Normalize list numbers and bullet prefixes followed by newlines (common PyMuPDF artifact: "1.\nTransaction")
+    normalized = re.sub(r"(?m)^([0-9]+\.|\([a-z0-9]+\)|[•\-\*])\s*\n+", r"\1 ", text)
+    # Collapse horizontal whitespace
+    normalized = re.sub(r"[ \t]+", " ", normalized)
+    # Collapse multiple blank lines
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    return normalized.strip()
+
+
+def _split_into_parent_chunks(
+    text: str,
+    tokenizer=None,
+    parent_tokens: int = 280,
+    parent_overlap_tokens: int = 40,
+) -> list[str]:
+    """Segment document text into larger, coherent parent paragraphs (800-1200 characters / ~250-300 tokens)."""
+    cleaned = clean_document_text(text)
+    if not cleaned:
+        return []
+
+    parent_max_chars = parent_tokens * 4
+    parent_overlap_chars = parent_overlap_tokens * 4
+
+    if len(cleaned) <= parent_max_chars:
+        return [cleaned]
+
+    # Split on natural boundaries: double newlines, list items, or major headings
+    raw_blocks = [
+        b.strip()
+        for b in re.split(r"\n\s*\n|\n(?=[0-9]+\.|\bLEC-\b|[A-Z][a-z]+:)", cleaned)
+        if b.strip()
+    ]
+    if not raw_blocks:
+        raw_blocks = [cleaned]
+
+    parents: list[str] = []
+    current_chunk: list[str] = []
+    current_len = 0
+
+    for b in raw_blocks:
+        b_len = len(b)
+        if current_len + b_len > parent_max_chars and current_chunk:
+            parent_text = "\n".join(current_chunk).strip()
+            parents.append(parent_text)
+
+            # Preserve overlap context
+            overlap_items = []
+            acc_len = 0
+            for item in reversed(current_chunk):
+                if acc_len + len(item) <= parent_overlap_chars:
+                    overlap_items.insert(0, item)
+                    acc_len += len(item)
+                else:
+                    break
+            current_chunk = overlap_items
+            current_len = acc_len
+
+        if b_len > parent_max_chars:
+            # Single giant block: split with sliding window
+            step = max(1, parent_max_chars - parent_overlap_chars)
+            for i in range(0, b_len, step):
+                part = b[i : i + parent_max_chars].strip()
+                if part:
+                    parents.append(part)
+                if i + parent_max_chars >= b_len:
+                    break
+        else:
+            current_chunk.append(b)
+            current_len += b_len
+
+    if current_chunk:
+        parent_text = "\n".join(current_chunk).strip()
+        if not parents or parent_text != parents[-1]:
+            parents.append(parent_text)
+
+    return parents or [cleaned]
+
+
+def _split_parent_into_children(
+    parent_text: str,
+    tokenizer=None,
+    child_tokens: int = 70,
+    child_overlap_tokens: int = 15,
+) -> list[str]:
+    """Subdivide a parent chunk into pinpoint semantic child chunks (150-300 characters / 1-3 dense sentences)."""
+    cleaned = parent_text.strip()
+    child_max_chars = child_tokens * 4
+    child_overlap_chars = child_overlap_tokens * 4
+
+    if len(cleaned) <= child_max_chars:
+        return [cleaned]
+
+    # Split along sentence boundaries or list items
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", cleaned) if s.strip()]
+    if not sentences:
+        return [cleaned]
+
+    children: list[str] = []
+    current_chunk: list[str] = []
+    current_len = 0
+
+    for s in sentences:
+        s_len = len(s)
+        if current_len + s_len > child_max_chars and current_chunk:
+            child_text = " ".join(current_chunk).strip()
+            children.append(child_text)
+            current_chunk = []
+            current_len = 0
+
+        if s_len > child_max_chars:
+            step = max(1, child_max_chars - child_overlap_chars)
+            for i in range(0, s_len, step):
+                part = s[i : i + child_max_chars].strip()
+                if part:
+                    children.append(part)
+                if i + child_max_chars >= s_len:
+                    break
+        else:
+            current_chunk.append(s)
+            current_len += s_len
+
+    if current_chunk:
+        child_text = " ".join(current_chunk).strip()
+        if not children or child_text != children[-1]:
+            children.append(child_text)
+
+    return children or [cleaned]
+
+
 def _token_aware_split_text(
     text: str,
     tokenizer,
@@ -187,32 +320,49 @@ def chunk_text(
     *,
     source: str,
     page: Optional[int],
-    chunk_tokens: int = 450,
-    overlap_tokens: int = 50,
+    chunk_tokens: int = 280,
+    overlap_tokens: int = 40,
 ) -> list[dict[str, Any]]:
-    """Token-aware chunking preserving structural Markdown/HTML tables in metadata."""
+    """Small-to-Big (Parent-Child) chunking preserving structural Markdown/HTML tables.
+    
+    Creates:
+      1. Parent Chunks: Logical paragraphs (800-1200 characters / ~250-300 tokens)
+      2. Child Chunks: Pinpoint semantic units (150-300 characters / ~50-70 tokens)
+    Child chunks are indexed for high-precision retrieval and resolve back to their parent context.
+    """
     if not text or not text.strip():
         return []
 
     tokenizer = get_tokenizer()
     segments = _extract_tables_and_text(text)
     chunks: list[dict[str, Any]] = []
-    chunk_idx = 0
+    chunk_counter = 0
 
-    for content, parsed_table in segments:
+    for seg_idx, (content, parsed_table) in enumerate(segments):
         if parsed_table is not None:
-            # Structural table: map structured representation to raw_table_json metadata
+            # Structural table: preserved as a single self-contained parent/child entity
             raw_table_json = json.dumps(parsed_table, ensure_ascii=False)
             embed_text = _table_to_embedding_text(parsed_table)
-            chunk_idx += 1
+            chunk_counter += 1
+            tbl_id = chunk_id(source, page or chunk_counter, embed_text)
             chunks.append(
                 {
-                    "id": chunk_id(source, page or chunk_idx, embed_text),
+                    "id": tbl_id,
                     "source": source,
-                    "page": page or chunk_idx,
+                    "page": page or chunk_counter,
                     "text": embed_text,
+                    "parent_id": tbl_id,
+                    "parent_text": embed_text,
+                    "child_index": 0,
+                    "is_child": False,
                     "raw_table_json": raw_table_json,
                     "metadata": {
+                        "source": str(source),
+                        "page": int(page or chunk_counter),
+                        "parent_id": tbl_id,
+                        "parent_text": embed_text,
+                        "child_index": 0,
+                        "is_child": False,
                         "raw_table_json": raw_table_json,
                         "is_table": True,
                         "table_format": parsed_table.get("format", "unknown"),
@@ -220,30 +370,52 @@ def chunk_text(
                 }
             )
         else:
-            # Standard text: apply token-aware splitting (450 target tokens, 50 overlap)
-            sub_chunks = _token_aware_split_text(
+            # Standard text: build Small-to-Big hierarchy
+            parent_blocks = _split_into_parent_chunks(
                 content,
                 tokenizer=tokenizer,
-                chunk_tokens=chunk_tokens,
-                overlap_tokens=overlap_tokens,
+                parent_tokens=chunk_tokens,
+                parent_overlap_tokens=overlap_tokens,
             )
-            for piece in sub_chunks:
-                if len(piece.strip()) < 10:
+            for p_idx, parent_text in enumerate(parent_blocks):
+                if len(parent_text.strip()) < 10:
                     continue
-                chunk_idx += 1
-                chunks.append(
-                    {
-                        "id": chunk_id(source, page or chunk_idx, piece),
-                        "source": source,
-                        "page": page or chunk_idx,
-                        "text": piece,
-                        "raw_table_json": None,
-                        "metadata": {
-                            "raw_table_json": None,
-                            "is_table": False,
-                        },
-                    }
+                chunk_counter += 1
+                p_id = f"pchk-{chunk_id(source, page or chunk_counter, parent_text)}"
+                
+                child_blocks = _split_parent_into_children(
+                    parent_text,
+                    tokenizer=tokenizer,
+                    child_tokens=70,
+                    child_overlap_tokens=15,
                 )
+                for c_idx, child_text in enumerate(child_blocks):
+                    if len(child_text.strip()) < 10:
+                        continue
+                    c_id = f"{p_id}_c{c_idx}"
+                    chunks.append(
+                        {
+                            "id": c_id,
+                            "source": source,
+                            "page": page or chunk_counter,
+                            "text": child_text,  # Indexed in vector store & BM25
+                            "parent_id": p_id,
+                            "parent_text": parent_text,  # Enclosing contextual paragraph
+                            "child_index": c_idx,
+                            "is_child": True,
+                            "raw_table_json": None,
+                            "metadata": {
+                                "source": str(source),
+                                "page": int(page or chunk_counter),
+                                "parent_id": p_id,
+                                "parent_text": parent_text,
+                                "child_index": c_idx,
+                                "is_child": True,
+                                "is_table": False,
+                                "raw_table_json": None,
+                            },
+                        }
+                    )
 
     return chunks
 

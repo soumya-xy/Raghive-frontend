@@ -44,27 +44,14 @@ def _ensure() -> None:
         except Exception:
             _device = "cpu"
 
-        # In lite mode on CPU, check if cached locally; if not, don't stall with 10GB download
+        # In lite mode on CPU, avoid running a heavy 2.5B Gemma cross-encoder on CPU which takes 100+ seconds.
+        # Fallback to high-dimensional BGE-M3 + BM25 RRF rank fusion which completes in milliseconds.
         if settings.raghive_mode == "lite" and _device == "cpu":
-            try:
-                import torch
-                from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-                logger.info("Checking for locally cached %s...", model_name)
-                _tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
-                _model = AutoModelForSequenceClassification.from_pretrained(model_name, local_files_only=True)
-                _model.to(_device)
-                _model.eval()
-                _reranker_name = model_name
-                logger.info("Loaded locally cached cross-encoder %s", model_name)
-                return
-            except Exception:
-                logger.info(
-                    "RAGHIVE_MODE=lite on CPU without local cache for %s. Operating in BGE-M3 high-dimensional mode.",
-                    model_name,
-                )
-                _reranker_name = "bge-m3-similarity"
-                return
+            logger.info(
+                "RAGHIVE_MODE=lite on CPU. Utilizing BGE-M3 + BM25 RRF composite ranking for millisecond-latency inference."
+            )
+            _reranker_name = "bge-m3-similarity"
+            return
 
         # Primary: Native HuggingFace Sequence Classification with 8,192 token window
         try:

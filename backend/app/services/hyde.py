@@ -39,6 +39,7 @@ def generate_hypothetical_document(query: str) -> Optional[str]:
             system=HYDE_SYSTEM_PROMPT,
             user=f"Technical query: {clean_q}\n\nFactual passage:",
             temperature=0.2,
+            max_tokens=200,
         )
         if passage and len(passage.strip()) > 15:
             _hyde_cache[clean_q] = passage.strip()

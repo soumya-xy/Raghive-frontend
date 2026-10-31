@@ -86,7 +86,7 @@ def llm_available() -> bool:
     return _llm_reachable
 
 
-def chat_complete(system: str, user: str, *, temperature: float = 0.0) -> str:
+def chat_complete(system: str, user: str, *, temperature: float = 0.0, max_tokens: Optional[int] = 1000) -> str:
     settings = get_settings()
     client = get_raw_openai()
     response = client.chat.completions.create(
@@ -96,11 +96,12 @@ def chat_complete(system: str, user: str, *, temperature: float = 0.0) -> str:
             {"role": "user", "content": user},
         ],
         temperature=temperature,
+        max_tokens=max_tokens,
     )
     return (response.choices[0].message.content or "").strip()
 
 
-def chat_stream(system: str, user: str, *, temperature: float = 0.0) -> Iterator[str]:
+def chat_stream(system: str, user: str, *, temperature: float = 0.0, max_tokens: Optional[int] = 1000) -> Iterator[str]:
     settings = get_settings()
     client = get_raw_openai()
     stream = client.chat.completions.create(
@@ -110,6 +111,7 @@ def chat_stream(system: str, user: str, *, temperature: float = 0.0) -> Iterator
             {"role": "user", "content": user},
         ],
         temperature=temperature,
+        max_tokens=max_tokens,
         stream=True,
     )
     for chunk in stream:

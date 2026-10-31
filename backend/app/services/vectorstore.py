@@ -121,6 +121,10 @@ def upsert_chunks(chunks: list[dict[str, Any]]) -> int:
         meta: dict[str, Any] = {
             "source": str(c.get("source") or "unknown"),
             "page": int(c.get("page") or 0),
+            "parent_id": str(c.get("parent_id") or c.get("id") or ""),
+            "parent_text": str(c.get("parent_text") or c.get("text") or ""),
+            "child_index": int(c.get("child_index") or 0),
+            "is_child": bool(c.get("is_child", False)),
         }
         raw_tbl = c.get("raw_table_json")
         if raw_tbl is None and isinstance(c.get("metadata"), dict):
@@ -231,13 +235,22 @@ def query_chunks(query: str, top_k: int = 12) -> list[dict[str, Any]]:
         meta = metas[i] if i < len(metas) else {}
         page = meta.get("page") or 0
         raw_table_json = meta.get("raw_table_json")
+        cid = ids[i] if i < len(ids) else chunk_id(str(meta.get("source")), page, text)
+        parent_id = meta.get("parent_id") or cid
+        parent_text = meta.get("parent_text") or text
+        child_index = int(meta.get("child_index") or 0)
+        is_child = bool(meta.get("is_child", False))
 
         out.append(
             {
-                "id": ids[i] if i < len(ids) else chunk_id(str(meta.get("source")), page, text),
+                "id": cid,
                 "source": meta.get("source") or "unknown",
                 "page": int(page) if page else None,
                 "text": text,
+                "parent_id": parent_id,
+                "parent_text": parent_text,
+                "child_index": child_index,
+                "is_child": is_child,
                 "similarity_score": sim,
                 "raw_table_json": raw_table_json,
                 "metadata": meta,

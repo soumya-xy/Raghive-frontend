@@ -91,12 +91,21 @@ class BM25CorpusIndex:
                     continue
                 meta = self._metas[idx] if idx < len(self._metas) else {}
                 page = meta.get("page") or 0
+                cid = self._ids[idx]
+                parent_id = meta.get("parent_id") or cid
+                parent_text = meta.get("parent_text") or self._docs[idx]
+                is_child = bool(meta.get("is_child", False))
+                child_index = int(meta.get("child_index") or 0)
                 results.append(
                     {
-                        "id": self._ids[idx],
+                        "id": cid,
                         "source": meta.get("source") or "unknown",
                         "page": int(page) if page else None,
                         "text": self._docs[idx],
+                        "parent_id": parent_id,
+                        "parent_text": parent_text,
+                        "is_child": is_child,
+                        "child_index": child_index,
                         "bm25_score": score,
                         "bm25_norm": float(np.clip(score / max_score, 0.0, 1.0)),
                         "bm25_rank": rank_0 + 1,

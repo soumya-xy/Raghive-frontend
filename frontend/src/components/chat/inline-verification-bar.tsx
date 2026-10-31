@@ -45,7 +45,9 @@ export function InlineVerificationBar({ messageId, trace }: InlineVerificationBa
         {trace.planner && (
           <div className="flex items-center space-x-1.5 text-amber-600 dark:text-amber-400">
             <Compass className="w-3.5 h-3.5" />
-            <span className="font-semibold">Plan ✅</span>
+            <span className="font-semibold">
+              {(trace.planner as any)?.routeDecision?.fast_path ? "⚡ Fast Path ✅" : "Plan ✅"}
+            </span>
           </div>
         )}
 

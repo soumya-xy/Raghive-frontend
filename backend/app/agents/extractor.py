@@ -33,37 +33,63 @@ def _metrics(chunks: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
-def _format_context(docs: list[dict[str, Any]], max_chunks: int = 8) -> str:
-    seen = set()
-    lines = []
-    # Rank surviving kept chunks by composite relevance
-    sorted_docs = sorted(
-        [d for d in docs if d.get("kept")],
-        key=lambda d: float(d.get("composite_score") or d.get("rerank_score") or d.get("similarity_score") or 0.0),
-        reverse=True,
-    )
-    if not sorted_docs and docs:
-        sorted_docs = docs[:max_chunks]
+def _format_context(docs: list[dict[str, Any]], max_chunks: int = 6) -> str:
+    """Format evidence context using Small-to-Big (Parent-Child) context resolution.
+    
+    Resolves retrieved child chunks to their enclosing parent paragraphs, collapses
+    redundant hits from the same parent, and ranks parent paragraphs by the highest
+    composite score of their constituent child matches.
+    """
+    kept_docs = [d for d in docs if d.get("kept")]
+    if not kept_docs and docs:
+        kept_docs = docs
 
-    for d in sorted_docs:
-        did = str(d.get("id") or id(d))
-        if did in seen:
-            continue
-        seen.add(did)
-        src = d.get("source") or "unknown"
-        page = d.get("page")
-        loc = f"{src}" + (f" p.{page}" if page else "")
-        raw_table = d.get("raw_table_json")
-        if not raw_table and isinstance(d.get("metadata"), dict):
-            raw_table = d["metadata"].get("raw_table_json")
+    if not kept_docs:
+        return "(no surviving evidence chunks)"
 
-        if raw_table:
-            lines.append(f"[{did} | {loc} | STRUCTURAL_TABLE]\n{d.get('text', '')}\n[TABLE_JSON]: {raw_table}")
+    parents_map: dict[str, dict[str, Any]] = {}
+    for d in kept_docs:
+        pid = str(d.get("parent_id") or d.get("id") or id(d))
+        score = float(d.get("composite_score") or d.get("rerank_score") or d.get("similarity_score") or 0.0)
+        p_text = d.get("parent_text") or d.get("text") or ""
+
+        if pid not in parents_map:
+            parents_map[pid] = {
+                "parent_id": pid,
+                "parent_text": p_text,
+                "source": d.get("source") or "unknown",
+                "page": d.get("page"),
+                "max_score": score,
+                "child_ids": [d.get("id")],
+                "raw_table_json": d.get("raw_table_json")
+                or (d.get("metadata", {}).get("raw_table_json") if isinstance(d.get("metadata"), dict) else None),
+            }
         else:
-            lines.append(f"[{did} | {loc}] {d.get('text', '')}")
-        if len(lines) >= max_chunks:
-            break
-    return "\n\n".join(lines)
+            parents_map[pid]["child_ids"].append(d.get("id"))
+            if score > parents_map[pid]["max_score"]:
+                parents_map[pid]["max_score"] = score
+            if len(p_text) > len(parents_map[pid]["parent_text"]):
+                parents_map[pid]["parent_text"] = p_text
+
+    sorted_parents = sorted(
+        parents_map.values(),
+        key=lambda p: float(p.get("max_score") or 0.0),
+        reverse=True,
+    )[:max_chunks]
+
+    formatted_blocks = []
+    for p in sorted_parents:
+        src = p.get("source") or "unknown"
+        page = p.get("page")
+        loc = f"{src}" + (f" p.{page}" if page else "")
+        pid = p["parent_id"]
+        raw_table = p.get("raw_table_json")
+        if raw_table:
+            formatted_blocks.append(f"[{pid} | {loc} | STRUCTURAL_TABLE]\n{p['parent_text']}\n[TABLE_JSON]: {raw_table}")
+        else:
+            formatted_blocks.append(f"[{pid} | {loc}]\n{p['parent_text']}")
+
+    return "\n\n".join(formatted_blocks)
 
 
 def _retrieve_for_query(

@@ -6,6 +6,7 @@ from typing import Any, Callable, Iterator, Optional
 
 import numpy as np
 
+from app.agents.extractor import _format_context
 from app.models.state import GraphState, PlanSteps
 from app.services.attention import run_attention_pass
 from app.services.embeddings import cosine01, embed_texts
@@ -20,11 +21,11 @@ Your task is to provide a comprehensive, clear, and logically structured answer 
 Strict Formatting & Presentation Guidelines:
 1. Executive Summary: Begin with a concise, high-level summary or formal definition that directly answers the user's prompt.
 2. Structured Headings: Organize your answer into distinct sections using Markdown headings (e.g. `### Section Name`).
-3. Core Concepts & Breakdown: Deep-dive into each concept with dedicated subsections, bullet points, and **bold key terms** for readability.
-4. Technical Accuracy: Explain the mechanisms, lifecycle, and implications directly grounded in the evidence.
-5. Code / Equations / Tables: If the evidence contains tables, transactions, or code snippets, format them in clean Markdown tables or syntax-highlighted code blocks.
-6. Honest Grounding: Rely strictly on facts stated in the evidence chunks. If details are missing, state what is known and what is omitted without hallucinating.
-7. Professional Polish: Do NOT output raw chunk IDs or OCR transcription artifacts directly in the text unless citing a source (e.g., `[DBMS_Full_Notes.pdf p.4]`). Write in polished, authoritative English."""
+3. Core Concepts & Breakdown: Deep-dive into each concept with dedicated subsections, bullet points, and **bold key terms** for maximum readability.
+4. Completeness & Concision: Thoroughly explain all core components (such as all four ACID properties: Atomicity, Consistency, Isolation, and Durability) within a structured, high-density response of 400-600 words. Conclude cleanly without dangling headings or mid-sentence cutoffs.
+5. Technical Polish: Do NOT output raw chunk IDs, fragmented OCR bullet numbers, or slide lecture tags (e.g. `LEC-12:`) directly in the prose. Synthesize facts into coherent, authoritative, professional English.
+6. Code / Equations / Tables: If relevant, provide summary Markdown tables or code representations.
+7. Honest Grounding: Rely strictly on facts stated in the evidence chunks without hallucinating. Include citations where appropriate (e.g., `[DBMS_Full_Notes.pdf p.24]`)."""
 
 
 def _plan_summary(plan: Optional[PlanSteps]) -> str:
@@ -38,42 +39,15 @@ def _build_user_prompt(state: GraphState, query_override: Optional[str] = None) 
     query = query_override or state.get("original_question") or ""
 
     docs = state.get("retrieved_docs") or []
-    kept_docs = [d for d in docs if d.get("kept")]
-    if not kept_docs and docs:
-        kept_docs = docs
-
-    if kept_docs:
-        # Deduplicate by ID and keep chunk with highest composite score
-        unique_map: dict[str, dict[str, Any]] = {}
-        for d in kept_docs:
-            did = str(d.get("id") or id(d))
-            score = float(d.get("composite_score") or d.get("rerank_score") or d.get("similarity_score") or 0.0)
-            if did not in unique_map or score > float(unique_map[did].get("composite_score") or 0.0):
-                unique_map[did] = d
-
-        # Sort descending by composite score, cap to top 6 chunks (~2000 tokens) to respect LLM rate limits
-        ranked = sorted(
-            unique_map.values(),
-            key=lambda d: float(d.get("composite_score") or d.get("rerank_score") or d.get("similarity_score") or 0.0),
-            reverse=True,
-        )[:6]
-
-        formatted_chunks = []
-        for d in ranked:
-            src = d.get("source") or "unknown"
-            page = d.get("page")
-            loc = f"{src}" + (f" p.{page}" if page else "")
-            formatted_chunks.append(f"[{d.get('id', 'chunk')} | {loc}]\n{d.get('text', '')}")
-        context = "\n\n".join(formatted_chunks)
-    else:
-        context = state.get("current_context") or "(no surviving evidence chunks)"
-        if len(context) > 8000:
-            context = context[:8000] + "\n...(context truncated for token budget)"
+    # Small-to-Big Parent Context Resolution: resolves child chunks to parent paragraphs and collapses duplicates
+    context = _format_context(docs, max_chunks=6) if docs else (state.get("current_context") or "(no surviving evidence chunks)")
+    if len(context) > 8000:
+        context = context[:8000] + "\n...(context truncated for token budget)"
 
     return (
         f"User question: {query}\n\n"
         f"{_plan_summary(state.get('plan'))}\n\n"
-        f"Evidence chunks:\n{context}\n\n"
+        f"Evidence chunks (resolved parent context):\n{context}\n\n"
         "Provide a comprehensive, authoritative, and logically structured answer in GitHub Markdown format based strictly on the verified evidence above."
     )
 
@@ -98,9 +72,9 @@ def _heuristic_answer(state: GraphState) -> str:
     )
     lines = ["### Evidence Summary (Offline Fallback)\n"]
     for i, d in enumerate(sorted_unique[:4], 1):
-        clean_text = d.get("text", "").strip().replace("\n", " ")
-        if len(clean_text) > 280:
-            clean_text = clean_text[:280].rsplit(" ", 1)[0] + "..."
+        clean_text = (d.get("parent_text") or d.get("text", "")).strip().replace("\n", " ")
+        if len(clean_text) > 350:
+            clean_text = clean_text[:350].rsplit(" ", 1)[0] + "..."
         src = d.get("source") or "Document"
         page = f" (p. {d.get('page')})" if d.get("page") else ""
         lines.append(f"- **Key Finding {i}** ({src}{page}): {clean_text}")

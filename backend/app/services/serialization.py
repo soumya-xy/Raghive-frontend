@@ -99,6 +99,7 @@ def planner_trace_json(state: GraphState) -> dict[str, Any]:
         "retried": bool(state.get("retried")),
         "retryReason": state.get("retry_reason"),
         "verificationChecks": verification_checks_json(state.get("verification_report") or {}),
+        "routeDecision": state.get("route_decision"),
     }
 
 
@@ -124,6 +125,12 @@ def retrieved_doc_to_chunk(doc: dict[str, Any]) -> dict[str, Any]:
         raw_tbl = doc["metadata"].get("raw_table_json")
     if raw_tbl:
         chunk["rawTableJson"] = raw_tbl
+    if doc.get("parent_id"):
+        chunk["parentId"] = doc["parent_id"]
+    if doc.get("parent_text"):
+        chunk["parentText"] = doc["parent_text"]
+    if "is_child" in doc:
+        chunk["isChild"] = bool(doc["is_child"])
     return chunk
 
 

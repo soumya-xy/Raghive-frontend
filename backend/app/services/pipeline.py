@@ -41,6 +41,35 @@ async def _run_qa(state: GraphState, answer: str) -> GraphState:
 # ---------------------------------------------------------------------------
 
 async def stream_from_planner(state: GraphState) -> AsyncIterator[Event]:
+    from app.services.router import QueryRoute, classify_query_complexity
+
+    route = classify_query_complexity(state["original_question"])
+    if route.route == QueryRoute.CONVERSATIONAL:
+        yield {"type": "agent_status", "agent": "planner", "status": "started"}
+        yield {"type": "agent_status", "agent": "planner", "status": "done"}
+        greeting = (
+            "Hello! I am **RAGHive Agent**, an Explainable Multi-Agent RAG assistant.\n\n"
+            "I can answer questions grounded in your technical documentation with complete reasoning traces, "
+            "sub-query verification, and citation matrices. Ask me anything about database systems, "
+            "transactions, system design, or your uploaded files!"
+        )
+        yield {"type": "agent_status", "agent": "qa", "status": "started"}
+        for word in greeting.split(" "):
+            yield {"type": "token", "data": word + " "}
+            await asyncio.sleep(0.015)
+        yield {"type": "agent_status", "agent": "qa", "status": "done"}
+        state["answer"] = greeting
+        state["confidence"] = 1.0
+        state["confidence_flag"] = "HIGH"
+        state["route_decision"] = route.model_dump()
+        dumped = dump_state(state)
+        trace = {
+            "qa": {"answer": greeting, "faithfulnessScore": 1.0, "faithfulnessTier": "HIGH", "citations": []},
+            "planner": {"steps": [], "confidence": 1.0, "confidenceLevel": "HIGH", "verificationChecks": {}},
+        }
+        yield {"type": "completed", "state": dumped, "trace": trace}
+        return
+
     yield {"type": "agent_status", "agent": "planner", "status": "started"}
     state = await _run_planner(state)
     report = state.get("verification_report") or {}
