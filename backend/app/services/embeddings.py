@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import math
 import re
+import threading
 from typing import Optional, Sequence
 
 import numpy as np
@@ -15,6 +17,8 @@ logger = logging.getLogger(__name__)
 _embedder = None
 _embedder_name = "hashing"
 _dim = 1024
+_embedder_lock = threading.Lock()
+_inference_lock = threading.Lock()
 
 
 def embedding_backend() -> str:
@@ -28,44 +32,47 @@ def _ensure_embedder() -> None:
     global _embedder, _embedder_name, _dim
     if _embedder is not None:
         return
-    settings = get_settings()
-
-    try:
-        import torch
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    except Exception:
-        device = "cpu"
-
-    models_to_try = [
-        settings.embedding_model or "BAAI/bge-m3",
-        "BAAI/bge-m3",
-        "BAAI/bge-small-en-v1.5",
-        "all-MiniLM-L6-v2",
-    ]
-
-    for model_name in models_to_try:
-        try:
-            from sentence_transformers import SentenceTransformer
-
-            _embedder = SentenceTransformer(model_name, device=device)
-            _embedder_name = model_name
-            if hasattr(_embedder, "get_embedding_dimension"):
-                _dim = int(_embedder.get_embedding_dimension())
-            elif hasattr(_embedder, "get_sentence_embedding_dimension"):
-                _dim = int(_embedder.get_sentence_embedding_dimension())
-            else:
-                _dim = 1024
-            logger.info("Loaded embedding model %s on %s with dim %d", model_name, device, _dim)
+    with _embedder_lock:
+        if _embedder is not None:
             return
-        except Exception as exc:
-            logger.warning("Could not load embedding model %s: %s", model_name, exc)
-            continue
+        settings = get_settings()
 
-    _embedder = "hash"
-    _embedder_name = "hashing-fallback"
-    _dim = 1024
-    logger.error("All neural embedding models failed to load. Falling back to 1024-dim hashing.")
+        try:
+            import torch
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            device = "cpu"
+
+        models_to_try = [
+            settings.embedding_model or "BAAI/bge-m3",
+            "BAAI/bge-m3",
+            "BAAI/bge-small-en-v1.5",
+            "all-MiniLM-L6-v2",
+        ]
+
+        for model_name in models_to_try:
+            try:
+                from sentence_transformers import SentenceTransformer
+
+                _embedder = SentenceTransformer(model_name, device=device)
+                _embedder_name = model_name
+                if hasattr(_embedder, "get_embedding_dimension"):
+                    _dim = int(_embedder.get_embedding_dimension())
+                elif hasattr(_embedder, "get_sentence_embedding_dimension"):
+                    _dim = int(_embedder.get_sentence_embedding_dimension())
+                else:
+                    _dim = 1024
+                logger.info("Loaded embedding model %s on %s with dim %d", model_name, device, _dim)
+                return
+            except Exception as exc:
+                logger.warning("Could not load embedding model %s: %s", model_name, exc)
+                continue
+
+        _embedder = "hash"
+        _embedder_name = "hashing-fallback"
+        _dim = 1024
+        logger.error("All neural embedding models failed to load. Falling back to 1024-dim hashing.")
 
 
 def _hash_embed(text: str) -> np.ndarray:
@@ -89,11 +96,12 @@ def embed_texts(texts: Sequence[str]) -> np.ndarray:
     if _embedder == "hash":
         return np.stack([_hash_embed(t) for t in texts], axis=0)
 
-    vectors = _embedder.encode(
-        list(texts),
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    )
+    with _inference_lock:
+        vectors = _embedder.encode(
+            list(texts),
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
     return np.asarray(vectors, dtype=np.float32)
 
 
@@ -110,3 +118,21 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
 
 def cosine01(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.clip((cosine(a, b) + 1.0) / 2.0, 0.0, 1.0))
+
+
+# ---------------------------------------------------------------------------
+# PHASE 0 — B4: Async wrappers for embedding calls
+# ---------------------------------------------------------------------------
+# SentenceTransformer.encode() is synchronous and blocks the FastAPI event
+# loop. These wrappers run encoding in the default executor (thread pool) so
+# other requests are not stalled while embeddings are computed.
+
+async def async_embed_texts(texts: Sequence[str]) -> np.ndarray:
+    """Non-blocking version of embed_texts() for use inside async handlers."""
+    return await asyncio.to_thread(embed_texts, list(texts))
+
+
+async def async_embed_query(text: str) -> np.ndarray:
+    """Non-blocking version of embed_query() for use inside async handlers."""
+    return await asyncio.to_thread(embed_query, text)
+

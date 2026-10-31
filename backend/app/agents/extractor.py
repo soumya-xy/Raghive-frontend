@@ -6,10 +6,10 @@ import numpy as np
 
 from app.models.state import GraphState, PlanSteps
 from app.services.attribution import dual_score
+from app.services.hyde import hyde_hybrid_retrieve
 from app.services.reranker import rerank
 from app.services.serialization import retrieved_doc_to_chunk
 from app.services.thresholds import get_thresholds
-from app.services.vectorstore import query_chunks
 
 
 def _metrics(chunks: list[dict[str, Any]]) -> dict[str, float]:
@@ -33,15 +33,23 @@ def _metrics(chunks: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
-def _format_context(docs: list[dict[str, Any]]) -> str:
+def _format_context(docs: list[dict[str, Any]], max_chunks: int = 8) -> str:
     seen = set()
     lines = []
-    for d in docs:
-        if not d.get("kept"):
+    # Rank surviving kept chunks by composite relevance
+    sorted_docs = sorted(
+        [d for d in docs if d.get("kept")],
+        key=lambda d: float(d.get("composite_score") or d.get("rerank_score") or d.get("similarity_score") or 0.0),
+        reverse=True,
+    )
+    if not sorted_docs and docs:
+        sorted_docs = docs[:max_chunks]
+
+    for d in sorted_docs:
+        did = str(d.get("id") or id(d))
+        if did in seen:
             continue
-        if d["id"] in seen:
-            continue
-        seen.add(d["id"])
+        seen.add(did)
         src = d.get("source") or "unknown"
         page = d.get("page")
         loc = f"{src}" + (f" p.{page}" if page else "")
@@ -50,9 +58,11 @@ def _format_context(docs: list[dict[str, Any]]) -> str:
             raw_table = d["metadata"].get("raw_table_json")
 
         if raw_table:
-            lines.append(f"[{d['id']} | {loc} | STRUCTURAL_TABLE]\n{d['text']}\n[TABLE_JSON]: {raw_table}")
+            lines.append(f"[{did} | {loc} | STRUCTURAL_TABLE]\n{d.get('text', '')}\n[TABLE_JSON]: {raw_table}")
         else:
-            lines.append(f"[{d['id']} | {loc}] {d['text']}")
+            lines.append(f"[{did} | {loc}] {d.get('text', '')}")
+        if len(lines) >= max_chunks:
+            break
     return "\n\n".join(lines)
 
 
@@ -68,11 +78,12 @@ def _retrieve_for_query(
     attr_t = max(0.30, thr.attribution_threshold - 0.12) if widen else thr.attribution_threshold
     rerank_n = min(top_k, thr.rerank_n + (4 if widen else 0))
 
-    candidates = query_chunks(sub_query, top_k=top_k)
+    # Phase 1 Upgrade: Hybrid (BM25 + BGE-M3 RRF) + HyDE (Hypothetical Document Embeddings)
+    candidates = hyde_hybrid_retrieve(sub_query, top_k=top_k)
 
     # Hybrid expansion: augment with original query chunks if sub-query pool is sparse
     if original_query and (len(candidates) < 4 or widen):
-        extra = query_chunks(original_query, top_k=top_k)
+        extra = hyde_hybrid_retrieve(original_query, top_k=top_k)
         seen_ids = {c["id"] for c in candidates}
         for c in extra:
             if c["id"] not in seen_ids:
@@ -90,7 +101,7 @@ def _retrieve_for_query(
         r_gemma = float(doc.get("rerank_score") if doc.get("rerank_score") is not None else s_sim)
 
         # Production composite scoring on DGX:
-        # Cross-encoder Gemma (50%) + Dense BGE-M3 (30%) + Ensemble Attribution (20%)
+        # Cross-encoder Gemma (50%) + Dense BGE-M3 / RRF (30%) + Ensemble Attribution (20%)
         composite = 0.50 * r_gemma + 0.30 * s_sim + 0.20 * a_ens
         doc["composite_score"] = float(np.clip(composite, 0.0, 1.0))
         doc["rerank_score"] = r_gemma

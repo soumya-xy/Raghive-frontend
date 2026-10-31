@@ -223,13 +223,15 @@ async def post_message(
         content="",
         pending=True,
     )
+    user_id = str(user.id)
+    assistant_id = str(assistant.id)
     strictness = body.verificationStrictness or crud.get_preferences(user).verificationStrictness or "standard"
 
     async def gen():
         async for packed in _sse_pipeline(
             chat_id,
-            user.id,
-            assistant.id,
+            user_id,
+            assistant_id,
             run_query_stream(body.content, strictness),
         ):
             yield packed
@@ -252,11 +254,12 @@ async def resume_message(
     if not row or not row.pipeline_state_json:
         raise HTTPException(status_code=404, detail="No paused pipeline for this message")
     state = load_state(json.loads(row.pipeline_state_json))
+    user_id = str(user.id)
 
     async def gen():
         async for packed in _sse_pipeline(
             chat_id,
-            user.id,
+            user_id,
             message_id,
             resume_stream(state, body.model_dump()),
         ):

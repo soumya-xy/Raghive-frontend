@@ -24,10 +24,14 @@ export function InlineVerificationBar({ messageId, trace }: InlineVerificationBa
     setTracePanelOpen(true);
   };
 
-  const keptChunksCount =
+  const uniqueKeptChunkIds = new Set(
     trace.extractor?.subQueries
       ?.flatMap((sq) => sq?.chunks || [])
-      ?.filter((c) => c?.keptForReasoning)?.length ?? 0;
+      ?.filter((c) => c?.keptForReasoning)
+      ?.map((c) => c?.id)
+      ?.filter(Boolean) || []
+  );
+  const keptChunksCount = uniqueKeptChunkIds.size;
 
   const faithfulnessPct =
     trace.qa?.faithfulnessScore != null

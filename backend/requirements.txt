@@ -18,7 +18,13 @@ pymupdf>=1.24.0
 firebase-admin>=6.6.0
 sentence-transformers>=3.0.0
 
+accelerate>=0.26.0
+rank-bm25>=0.2.2
+cachetools>=5.5.0
+ragas>=0.2.0
+datasets>=3.0.0
+
 # Optional ML extras (install when a GPU is available):
-#   pip install gliner accelerate
+#   pip install gliner
 #   python -m spacy download en_core_web_sm
 # bitsandbytes is Linux/CUDA only — skip on Windows.

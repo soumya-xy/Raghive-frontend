@@ -6,6 +6,7 @@ import { MessageBubble } from "./message-bubble";
 import { EmptyState } from "../shared/empty-state";
 import { useChatStore } from "@/lib/store/use-chat-store";
 import { HexMark } from "../shared/hex-mark";
+import { MarkdownRenderer } from "./markdown-renderer";
 
 interface MessageListProps {
   messages: Message[];
@@ -14,7 +15,7 @@ interface MessageListProps {
 
 export function MessageList({ messages, onSelectPrompt }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { isStreaming, streamingAnswerText, streamingStatus } = useChatStore();
+  const { isStreaming, streamingAnswerText } = useChatStore();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -30,7 +31,7 @@ export function MessageList({ messages, onSelectPrompt }: MessageListProps) {
         <MessageBubble key={msg.id} message={msg} />
       ))}
 
-      {/* Live Answer Streaming Block */}
+      {/* Live Answer Streaming Block with Rich Markdown */}
       {isStreaming && streamingAnswerText && (
         <div className="flex items-start space-x-3 mb-8 max-w-3xl animate-in fade-in-50">
           <div className="p-1 rounded-xl bg-surface border border-surface shadow-xs shrink-0 mt-1">
@@ -45,10 +46,7 @@ export function MessageList({ messages, onSelectPrompt }: MessageListProps) {
               </span>
             </div>
 
-            <div className="text-sm text-ink leading-relaxed font-sans whitespace-pre-wrap">
-              {streamingAnswerText}
-              <span className="inline-block w-2 h-4 ml-1 bg-amber-500 animate-pulse" />
-            </div>
+            <MarkdownRenderer content={streamingAnswerText} isStreaming={true} />
           </div>
         </div>
       )}

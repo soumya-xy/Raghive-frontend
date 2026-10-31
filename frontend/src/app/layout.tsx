@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "sonner";
 import { Providers } from "@/components/providers";
 
 const fraunces = Fraunces({
@@ -42,7 +41,6 @@ export default function RootLayout({
       <body className="min-h-screen bg-app text-ink font-ui antialiased selection:bg-amber-500/20 selection:text-amber-500">
         <Providers>
           {children}
-          <Toaster position="bottom-right" theme="dark" richColors />
         </Providers>
       </body>
     </html>

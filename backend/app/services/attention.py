@@ -5,10 +5,16 @@ This is an *independent grounding verification* via Qwen2.5-0.5B (or a
 lexical fallback). It does **not** explain why the 32B generated a plan —
 vLLM does not expose per-layer attention, so a smaller local model is used
 as a proxy. Adapted from MA_RAG_BTP/utils/attention_extractor.py.
+
+PHASE 0 — A1: The Qwen2.5-0.5B proxy model is now a persistent module-level
+singleton. It is loaded once on first use and kept resident in memory for the
+lifetime of the process. This eliminates the 10-30 s cold-load overhead that
+was previously paid on *every single request* via load_hf_model / unload_hf_model.
 """
 from __future__ import annotations
 
 import gc
+import logging
 import math
 import re
 from typing import Any, Optional
@@ -17,12 +23,23 @@ import numpy as np
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 _tokenizer = None
 _tokenizer_name: Optional[str] = None
 
+# ---------------------------------------------------------------------------
+# Persistent singleton for the Qwen2.5-0.5B XAI proxy model
+# ---------------------------------------------------------------------------
+# Loaded once on first call to run_attention_pass(); kept alive until the
+# process exits (or unload_proxy_model() is explicitly called on shutdown).
+_proxy_model = None
+_proxy_tokenizer = None
+_proxy_model_name: Optional[str] = None
+
 
 def get_xai_tokenizer():
-    """Module-level tokenizer singleton — must match the attention proxy."""
+    """Module-level tokenizer singleton -- must match the attention proxy."""
     global _tokenizer, _tokenizer_name
     settings = get_settings()
     if _tokenizer is not None and _tokenizer_name == settings.xai_model_name:
@@ -38,6 +55,64 @@ def get_xai_tokenizer():
         _tokenizer_name = "whitespace-fallback"
         return _tokenizer
 
+
+def _get_proxy_model():
+    """
+    Return the persistent (model, tokenizer) pair for the XAI proxy.
+
+    First call: loads from disk/HF cache and stores in module globals.
+    Subsequent calls: returns instantly with zero I/O.
+    Returns (None, None) if loading fails so lexical fallback is used.
+    """
+    global _proxy_model, _proxy_tokenizer, _proxy_model_name
+    settings = get_settings()
+    model_name = settings.xai_model_name
+
+    if _proxy_model is not None and _proxy_model_name == model_name:
+        return _proxy_model, _proxy_tokenizer
+
+    logger.info(
+        "[attention] Loading XAI proxy model '%s' into persistent singleton...",
+        model_name,
+    )
+    try:
+        _proxy_model, _proxy_tokenizer = load_hf_model(model_name, use_4bit=True)
+        _proxy_model_name = model_name
+        logger.info(
+            "[attention] XAI proxy model '%s' loaded and will remain resident in memory.",
+            model_name,
+        )
+        return _proxy_model, _proxy_tokenizer
+    except Exception as exc:
+        logger.warning(
+            "[attention] Could not load XAI proxy model '%s': %s -- lexical fallback active.",
+            model_name,
+            exc,
+        )
+        _proxy_model = None
+        _proxy_tokenizer = None
+        _proxy_model_name = None
+        return None, None
+
+
+def unload_proxy_model() -> None:
+    """
+    Explicitly release the proxy model (e.g. on application shutdown).
+    This is NOT called during normal request handling -- the singleton stays
+    loaded for the process lifetime to avoid per-request reload cost.
+    """
+    global _proxy_model, _proxy_tokenizer, _proxy_model_name
+    if _proxy_model is not None:
+        logger.info("[attention] Unloading XAI proxy model on shutdown.")
+        unload_hf_model(_proxy_model)
+        _proxy_model = None
+        _proxy_tokenizer = None
+        _proxy_model_name = None
+
+
+# ---------------------------------------------------------------------------
+# Utility: Whitespace tokenizer fallback
+# ---------------------------------------------------------------------------
 
 class WhitespaceTokenizer:
     """Minimal tokenizer used when HuggingFace weights are unavailable."""
@@ -85,6 +160,10 @@ def _ws_tokens(text: str) -> list[str]:
     return re.findall(r"\S+", text) or [text]
 
 
+# ---------------------------------------------------------------------------
+# HuggingFace model load/unload helpers (used by the singleton loader above)
+# ---------------------------------------------------------------------------
+
 def load_hf_model(model_name: str, use_4bit: bool = False):
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -124,6 +203,10 @@ def unload_hf_model(model) -> None:
     except Exception:
         pass
 
+
+# ---------------------------------------------------------------------------
+# Attention extraction
+# ---------------------------------------------------------------------------
 
 def extract_attention_weights(query: str, plan_text: str, model, tokenizer) -> dict[str, Any]:
     import torch
@@ -170,7 +253,7 @@ def extract_attention_weights(query: str, plan_text: str, model, tokenizer) -> d
 def lexical_attention_fallback(query: str, plan_text: str, keywords: list[str]) -> dict[str, Any]:
     """
     Deterministic stand-in used when the 0.5B proxy cannot be loaded.
-    Overlap between plan tokens and query/keyword tokens — not a 32B explanation.
+    Overlap between plan tokens and query/keyword tokens -- not a 32B explanation.
     """
     q_tokens = _ws_tokens(query)
     p_tokens = _ws_tokens(plan_text)
@@ -210,16 +293,26 @@ def lexical_attention_fallback(query: str, plan_text: str, keywords: list[str]) 
 
 
 def run_attention_pass(query: str, plan_text: str, keywords: list[str]) -> dict[str, Any]:
-    settings = get_settings()
+    """
+    Run attention extraction using the persistent proxy model singleton.
+
+    Previously: loaded Qwen2.5-0.5B -> extracted -> unloaded (every request).
+    Now:        calls _get_proxy_model() which returns the already-loaded model
+                in O(1), with no I/O. Falls back to lexical if model unavailable.
+    """
+    model, tokenizer = _get_proxy_model()
+    if model is None:
+        return lexical_attention_fallback(query, plan_text, keywords)
     try:
-        model, tokenizer = load_hf_model(settings.xai_model_name, use_4bit=True)
-        try:
-            return extract_attention_weights(query, plan_text, model, tokenizer)
-        finally:
-            unload_hf_model(model)
-    except Exception:
+        return extract_attention_weights(query, plan_text, model, tokenizer)
+    except Exception as exc:
+        logger.warning("[attention] extract_attention_weights failed: %s -- using lexical fallback.", exc)
         return lexical_attention_fallback(query, plan_text, keywords)
 
+
+# ---------------------------------------------------------------------------
+# Slice & pool helpers (for UI rendering)
+# ---------------------------------------------------------------------------
 
 def slice_plan_to_query(attention_weights: dict[str, Any]) -> tuple[list[list[float]], list[str], list[str]]:
     matrix = np.array(attention_weights["matrix"] if "matrix" in attention_weights else attention_weights["attention_matrix"])

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useUIStore } from "@/lib/store/use-ui-store";
 import { AuthProvider } from "@/lib/firebase/auth-context";
+import { Toaster } from "sonner";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -38,7 +39,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        {children}
+        <Toaster position="bottom-right" theme="dark" richColors />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

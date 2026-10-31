@@ -20,6 +20,21 @@ _collection = None
 _chroma_client = None
 
 
+def _invalidate_downstream_caches() -> None:
+    """Invalidate in-memory BM25 index and semantic pipeline cache after corpus changes."""
+    try:
+        from app.services.hybrid_retriever import get_bm25_index
+        get_bm25_index().invalidate()
+    except Exception:
+        pass
+
+    try:
+        from app.services.semantic_cache import get_pipeline_cache
+        get_pipeline_cache().clear()
+    except Exception:
+        pass
+
+
 def get_collection(force_reload: bool = False):
     global _collection, _chroma_client
     import chromadb
@@ -74,6 +89,7 @@ def reset_collection():
         metadata={"hnsw:space": "cosine"},
         embedding_function=None,
     )
+    _invalidate_downstream_caches()
     logger.info("Initialized fresh Chroma collection %s", settings.chroma_collection)
     return _collection
 
@@ -148,6 +164,7 @@ def upsert_chunks(chunks: list[dict[str, Any]]) -> int:
         else:
             raise exc
 
+    _invalidate_downstream_caches()
     return len(chunks)
 
 

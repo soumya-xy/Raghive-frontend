@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Callable, Iterator, Optional
 
@@ -11,10 +12,19 @@ from app.services.embeddings import cosine01, embed_texts
 from app.services.llm import chat_complete, chat_stream, llm_available
 from app.services.thresholds import get_thresholds
 
-QA_SYSTEM = """You are the RAGHive QA/Reasoning agent.
-Provide a clear, accurate, and direct answer to the user's question using ONLY the provided evidence chunks.
-Synthesize relevant details across the chunks. Cite sources or chunk references where appropriate.
-If the evidence does not contain enough information to fully answer, state what is known from the evidence and what is missing."""
+logger = logging.getLogger(__name__)
+
+QA_SYSTEM = """You are an expert technical AI and academic professor for RAGHive, an enterprise-grade Explainable RAG platform.
+Your task is to provide a comprehensive, clear, and logically structured answer to the user's question using ONLY the provided verified evidence chunks.
+
+Strict Formatting & Presentation Guidelines:
+1. Executive Summary: Begin with a concise, high-level summary or formal definition that directly answers the user's prompt.
+2. Structured Headings: Organize your answer into distinct sections using Markdown headings (e.g. `### Section Name`).
+3. Core Concepts & Breakdown: Deep-dive into each concept with dedicated subsections, bullet points, and **bold key terms** for readability.
+4. Technical Accuracy: Explain the mechanisms, lifecycle, and implications directly grounded in the evidence.
+5. Code / Equations / Tables: If the evidence contains tables, transactions, or code snippets, format them in clean Markdown tables or syntax-highlighted code blocks.
+6. Honest Grounding: Rely strictly on facts stated in the evidence chunks. If details are missing, state what is known and what is omitted without hallucinating.
+7. Professional Polish: Do NOT output raw chunk IDs or OCR transcription artifacts directly in the text unless citing a source (e.g., `[DBMS_Full_Notes.pdf p.4]`). Write in polished, authoritative English."""
 
 
 def _plan_summary(plan: Optional[PlanSteps]) -> str:
@@ -25,15 +35,46 @@ def _plan_summary(plan: Optional[PlanSteps]) -> str:
 
 
 def _build_user_prompt(state: GraphState, query_override: Optional[str] = None) -> str:
-    query = query_override or state["original_question"]
-    context = state.get("current_context") or ""
-    if not context:
-        context = "(no surviving evidence chunks)"
+    query = query_override or state.get("original_question") or ""
+
+    docs = state.get("retrieved_docs") or []
+    kept_docs = [d for d in docs if d.get("kept")]
+    if not kept_docs and docs:
+        kept_docs = docs
+
+    if kept_docs:
+        # Deduplicate by ID and keep chunk with highest composite score
+        unique_map: dict[str, dict[str, Any]] = {}
+        for d in kept_docs:
+            did = str(d.get("id") or id(d))
+            score = float(d.get("composite_score") or d.get("rerank_score") or d.get("similarity_score") or 0.0)
+            if did not in unique_map or score > float(unique_map[did].get("composite_score") or 0.0):
+                unique_map[did] = d
+
+        # Sort descending by composite score, cap to top 6 chunks (~2000 tokens) to respect LLM rate limits
+        ranked = sorted(
+            unique_map.values(),
+            key=lambda d: float(d.get("composite_score") or d.get("rerank_score") or d.get("similarity_score") or 0.0),
+            reverse=True,
+        )[:6]
+
+        formatted_chunks = []
+        for d in ranked:
+            src = d.get("source") or "unknown"
+            page = d.get("page")
+            loc = f"{src}" + (f" p.{page}" if page else "")
+            formatted_chunks.append(f"[{d.get('id', 'chunk')} | {loc}]\n{d.get('text', '')}")
+        context = "\n\n".join(formatted_chunks)
+    else:
+        context = state.get("current_context") or "(no surviving evidence chunks)"
+        if len(context) > 8000:
+            context = context[:8000] + "\n...(context truncated for token budget)"
+
     return (
         f"User question: {query}\n\n"
         f"{_plan_summary(state.get('plan'))}\n\n"
         f"Evidence chunks:\n{context}\n\n"
-        "Provide a direct, complete, and grounded answer to the user question based on the evidence above."
+        "Provide a comprehensive, authoritative, and logically structured answer in GitHub Markdown format based strictly on the verified evidence above."
     )
 
 
@@ -44,17 +85,35 @@ def _heuristic_answer(state: GraphState) -> str:
             "I don't have enough verified evidence to answer this confidently. "
             "No retrieved chunks survived the Extractor's dual-score filter."
         )
-    snippets = " ".join(d["text"] for d in docs[:4])
-    return snippets[:900]
+    # Deduplicate and sort by composite score
+    unique: dict[str, dict[str, Any]] = {}
+    for d in docs:
+        did = str(d.get("id") or id(d))
+        if did not in unique:
+            unique[did] = d
+    sorted_unique = sorted(
+        unique.values(),
+        key=lambda d: float(d.get("composite_score") or d.get("similarity_score") or 0.0),
+        reverse=True,
+    )
+    lines = ["### Evidence Summary (Offline Fallback)\n"]
+    for i, d in enumerate(sorted_unique[:4], 1):
+        clean_text = d.get("text", "").strip().replace("\n", " ")
+        if len(clean_text) > 280:
+            clean_text = clean_text[:280].rsplit(" ", 1)[0] + "..."
+        src = d.get("source") or "Document"
+        page = f" (p. {d.get('page')})" if d.get("page") else ""
+        lines.append(f"- **Key Finding {i}** ({src}{page}): {clean_text}")
+    return "\n".join(lines)
 
 
 def generate_answer(state: GraphState, query_override: Optional[str] = None) -> str:
     prompt = _build_user_prompt(state, query_override)
     if llm_available():
         try:
-            return chat_complete(QA_SYSTEM, prompt, temperature=0.0)
-        except Exception:
-            pass
+            return chat_complete(QA_SYSTEM, prompt, temperature=0.1)
+        except Exception as e:
+            logger.error("LLM generate_answer failed: %s", e, exc_info=True)
     return _heuristic_answer(state)
 
 
@@ -62,10 +121,10 @@ def stream_answer(state: GraphState) -> Iterator[str]:
     prompt = _build_user_prompt(state)
     if llm_available():
         try:
-            yield from chat_stream(QA_SYSTEM, prompt, temperature=0.0)
+            yield from chat_stream(QA_SYSTEM, prompt, temperature=0.1)
             return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("LLM stream_answer failed: %s", e, exc_info=True)
     text = _heuristic_answer(state)
     for tok in text.split(" "):
         yield tok + " "
