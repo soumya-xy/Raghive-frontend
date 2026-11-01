@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, use } from "react";
+import React, { use, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMessages } from "@/lib/hooks/use-messages";
 import { MessageList } from "@/components/chat/message-list";
@@ -8,13 +8,25 @@ import { Composer } from "@/components/chat/composer";
 import { AgentStatusIndicator } from "@/components/chat/agent-status-indicator";
 import { HitlPanel } from "@/components/chat/hitl-panel";
 import { TracePanel } from "@/components/trace/trace-panel";
+import { AppTopbar } from "@/components/layout/app-topbar";
 import { useUIStore } from "@/lib/store/use-ui-store";
 import { useChatStore } from "@/lib/store/use-chat-store";
 import { ApiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { PageTransition } from "@/components/shared/page-transition";
 import { toast } from "sonner";
-import { PlannerTrace, StreamEvent } from "@/lib/api/types";
+import { Message, PlannerTrace, ReasoningTrace, StreamEvent } from "@/lib/api/types";
+
+interface ChatDetailCache {
+  chat: unknown;
+  messages: Message[];
+}
+
+const STAGE_TEXT = {
+  planner: "Decomposing the question and checking the plan…",
+  extractor: "Retrieving evidence and scoring each chunk…",
+  qa: "Writing the answer and grounding it in evidence…",
+} as const;
 
 export default function ChatPage({ params }: { params: Promise<{ chatId: string }> }) {
   const resolvedParams = use(params);
@@ -23,12 +35,19 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
   const { idToken } = useAuth();
   const queryClient = useQueryClient();
   const { messages, isLoading, invalidateMessages } = useMessages(chatId);
-  const { tracePanelOpen, verificationStrictness } = useUIStore();
+  const { tracePanelOpen, verificationStrictness, alwaysShowTrace, setTracePanelOpen } = useUIStore();
+
+  // Apply the saved "open the trace panel by default" preference once per session.
+  const appliedDefaultRef = React.useRef(false);
+  useEffect(() => {
+    if (appliedDefaultRef.current) return;
+    appliedDefaultRef.current = true;
+    if (!alwaysShowTrace && tracePanelOpen) setTracePanelOpen(false);
+  }, [alwaysShowTrace, tracePanelOpen, setTracePanelOpen]);
 
   const activeTrace = useChatStore((s) => s.activeTrace);
   const hitlPending = useChatStore((s) => s.hitlPending);
   const hitlPlan = useChatStore((s) => s.hitlPlan);
-  const hitlMessageId = useChatStore((s) => s.hitlMessageId);
 
   useEffect(() => {
     const store = useChatStore.getState();
@@ -37,67 +56,82 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
     }
     if (messages.length > 0) {
       const lastAsstMsg = [...messages].reverse().find((m) => m.role === "assistant" && m.trace);
-      if (lastAsstMsg?.trace && store.activeMessageId !== lastAsstMsg.id) {
+      // Select the latest trace when nothing is selected yet, or when a newer
+      // assistant message arrived. Comparing IDs alone breaks when the store
+      // default happens to match a stored message id.
+      if (lastAsstMsg?.trace && (!store.activeTrace || store.activeMessageId !== lastAsstMsg.id)) {
         store.setActiveTrace(lastAsstMsg.trace);
         store.setActiveMessageId(lastAsstMsg.id);
       }
     }
   }, [chatId, messages]);
 
-  const handlePipelineEvents = (liveTrace: any, event: StreamEvent) => {
+  const handlePipelineEvents = (liveTrace: ReasoningTrace, event: StreamEvent) => {
     const currentStore = useChatStore.getState();
-    if (event.type === "agent_status") {
-      if (event.status === "started") {
-        const statusKey = (event.agent as "planner" | "extractor" | "qa") || "planner";
-        currentStore.setStreamingStatus(
-          statusKey,
-          statusKey === "planner"
-            ? "Decomposing query steps & verifying keyword attention..."
-            : statusKey === "extractor"
-            ? "Retrieving ChromaDB chunks & computing NormEnsembleXAI attribution..."
-            : "Synthesizing answer & computing citation heatmap..."
-        );
-      } else if (event.status === "retrying") {
-        currentStore.setStreamingStatus(
-          "planner",
-          event.reason || "Attention check failed initial pass. Retrying decomposition..."
-        );
-      } else if (event.status === "awaiting_human_input") {
-        currentStore.setStreamingStatus("planner", "Waiting for human review of the failed plan...");
+
+    switch (event.type) {
+      case "agent_status": {
+        const agent = (event.agent === "extractor" || event.agent === "qa" ? event.agent : "planner") as
+          | "planner"
+          | "extractor"
+          | "qa";
+        if (event.status === "started") {
+          currentStore.setStreamingStatus(agent, STAGE_TEXT[agent]);
+        } else if (event.status === "retrying") {
+          currentStore.setStreamingStatus("planner", event.reason || "Retrying the plan with feedback…");
+        } else if (event.status === "awaiting_human_input") {
+          currentStore.setStreamingStatus("planner", "Waiting for your review of the plan…");
+        }
+        break;
       }
-    } else if (event.type === "planner_result") {
-      liveTrace.planner = event.data;
-      currentStore.setActiveTrace({ ...liveTrace });
-    } else if (event.type === "extractor_result") {
-      liveTrace.extractor = event.data;
-      currentStore.setActiveTrace({ ...liveTrace });
-    } else if (event.type === "token") {
-      currentStore.appendStreamingAnswerText(event.data);
-    } else if (event.type === "qa_result") {
-      liveTrace.qa = event.data;
-      currentStore.setActiveTrace({ ...liveTrace });
-    } else if (event.type === "awaiting_human_input") {
-      currentStore.setHitl({
-        pending: true,
-        plan: (event.data?.plan as PlannerTrace) || liveTrace.planner,
-        report: event.data?.verificationReport,
-      });
-    } else if (event.type === "done") {
-      if (event.pending) {
-        currentStore.setHitl({ pending: true, messageId: event.messageId || null });
-        currentStore.setIsStreaming(false);
+      case "planner_result":
+        liveTrace.planner = event.data as ReasoningTrace["planner"];
+        currentStore.setActiveTrace({ ...liveTrace });
+        break;
+      case "extractor_result":
+        liveTrace.extractor = event.data as ReasoningTrace["extractor"];
+        currentStore.setActiveTrace({ ...liveTrace });
+        break;
+      case "qa_result":
+        liveTrace.qa = event.data as ReasoningTrace["qa"];
+        currentStore.setActiveTrace({ ...liveTrace });
+        break;
+      case "token":
+        currentStore.appendStreamingAnswerText(String(event.data ?? ""));
+        break;
+      case "awaiting_human_input": {
+        const payload = (event.data ?? {}) as {
+          plan?: PlannerTrace;
+          verificationReport?: unknown;
+        };
+        currentStore.setHitl({
+          pending: true,
+          plan: payload.plan || liveTrace.planner,
+          report: payload.verificationReport,
+        });
+        break;
+      }
+      case "done": {
+        if (event.pending) {
+          currentStore.setHitl({ pending: true, messageId: event.messageId || null });
+          currentStore.setIsStreaming(false);
+          invalidateMessages();
+          toast.message("Paused for review — the plan needs your approval.");
+          return;
+        }
+        currentStore.setHitl({ pending: false, messageId: null, plan: null, report: null });
+        currentStore.resetStream();
         invalidateMessages();
-        toast.message("Planner paused — human review required.");
-        return;
+        if (event.messageId) currentStore.setActiveMessageId(event.messageId);
+        toast.success("Answer ready");
+        break;
       }
-      currentStore.setHitl({ pending: false, messageId: null, plan: null, report: null });
-      currentStore.resetStream();
-      invalidateMessages();
-      if (event.messageId) currentStore.setActiveMessageId(event.messageId);
-      toast.success("Query verified & synthesized successfully!");
-    } else if (event.type === "error") {
-      toast.error(event.message || "Query stream error");
-      currentStore.resetStream();
+      case "error":
+        toast.error(event.message || "The pipeline returned an error.");
+        currentStore.resetStream();
+        break;
+      default:
+        break;
     }
   };
 
@@ -106,9 +140,10 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
     store.setIsStreaming(true);
     store.setStreamingAnswerText("");
     store.setHitl({ pending: false, plan: null, report: null, messageId: null });
-    store.setStreamingStatus("planner", "Planner Agent extracting keywords & decomposing query...");
+    store.setStreamingStatus("planner", STAGE_TEXT.planner);
 
-    queryClient.setQueryData(["messages", chatId, idToken], (old: any) => {
+    // Optimistically show the user message; invalidateMessages() reconciles with the server.
+    queryClient.setQueryData<ChatDetailCache>(["messages", chatId, idToken], (old) => {
       if (!old) return old;
       return {
         ...old,
@@ -125,7 +160,7 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
     });
 
     try {
-      const liveTrace: any = { planner: null, extractor: null, qa: null };
+      const liveTrace: ReasoningTrace = { planner: null, extractor: null, qa: null };
       await ApiClient.sendQueryStream(
         chatId,
         content,
@@ -133,8 +168,8 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
         idToken || undefined,
         { verificationStrictness }
       );
-    } catch (e: any) {
-      toast.error(e.message || "Failed to process query.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not send the query.");
       useChatStore.getState().resetStream();
     }
   };
@@ -149,11 +184,13 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
       toast.error("No paused message to resume.");
       return;
     }
+
     const store = useChatStore.getState();
     store.setIsStreaming(true);
     store.setHitl({ pending: false });
+
     try {
-      const liveTrace: any = { planner: store.hitlPlan, extractor: null, qa: null };
+      const liveTrace: ReasoningTrace = { planner: store.hitlPlan, extractor: null, qa: null };
       await ApiClient.resumeQueryStream(
         chatId,
         messageId,
@@ -161,15 +198,16 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
         (event) => handlePipelineEvents(liveTrace, event),
         idToken || undefined
       );
-    } catch (e: any) {
-      toast.error(e.message || "Failed to resume pipeline.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not resume the pipeline.");
       useChatStore.getState().resetStream();
     }
   };
 
   return (
-    <PageTransition className="flex-1 flex min-w-0 h-full overflow-hidden">
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-app">
+    <PageTransition className="flex h-full min-w-0 flex-1 overflow-hidden">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+        <AppTopbar chatId={chatId} />
         <MessageList messages={messages} onSelectPrompt={handleSend} />
         <AgentStatusIndicator />
         {hitlPending && (
@@ -183,7 +221,7 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
         <Composer onSend={handleSend} disabled={isLoading || hitlPending} />
       </div>
 
-      {tracePanelOpen && <TracePanel trace={activeTrace} isLoading={isLoading} />}
+      <TracePanel trace={activeTrace} isLoading={isLoading} />
     </PageTransition>
   );
 }

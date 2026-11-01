@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { HexMark } from "@/components/shared/hex-mark";
+import React from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RotateCw } from "lucide-react";
 
 export default function GlobalError({
   error,
@@ -12,30 +12,32 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
+  React.useEffect(() => {
     console.error("Global boundary caught error:", error);
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-app text-ink flex flex-col items-center justify-center p-4 text-center">
-      <div className="p-4 rounded-3xl bg-rose-500/10 border border-rose-500/30 mb-6 text-rose-500">
-        <AlertTriangle className="w-12 h-12" />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg-app)] p-6 text-center text-ink">
+      <div className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--status-danger-border)] bg-[var(--status-danger-bg)]">
+        <AlertTriangle className="h-5 w-5 text-[var(--status-danger)]" />
       </div>
 
-      <span className="font-mono text-xs font-bold text-rose-500 uppercase tracking-widest">
-        PIPELINE EXCEPTION ENCOUNTERED
-      </span>
-      <h1 className="font-display text-3xl font-bold text-ink mt-2">
-        An unexpected error occurred
-      </h1>
-      <p className="text-muted text-xs max-w-md mt-2 font-mono bg-surface p-3 rounded-lg border border-surface">
-        {error.message || "Unknown error"}
+      <h1 className="font-display text-[22px] font-semibold text-ink">Something went wrong</h1>
+      <p className="mt-1.5 max-w-md text-[13px] text-[var(--text-muted)]">
+        The page hit an unexpected error. You can retry, or go back to the workspace.
       </p>
 
-      <div className="mt-6 flex space-x-3">
-        <Button variant="amber" onClick={() => reset()} className="font-semibold">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Retry Pipeline Execution
+      <pre className="mt-4 max-w-md overflow-x-auto rounded-md border border-[var(--border-surface)] bg-[var(--bg-surface)] p-3 text-left text-[11px] text-[var(--text-secondary)]">
+        {error.message || "Unknown error"}
+      </pre>
+
+      <div className="mt-6 flex gap-2">
+        <Button variant="primary" onClick={() => reset()}>
+          <RotateCw className="h-3.5 w-3.5" />
+          Try again
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/app/chat">Back to workspace</Link>
         </Button>
       </div>
     </div>

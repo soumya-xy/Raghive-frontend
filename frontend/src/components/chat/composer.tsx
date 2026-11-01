@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, Sparkles, StopCircle } from "lucide-react";
-import { Button } from "../ui/button";
+import React, { useRef, useState } from "react";
+import { ArrowUp, Paperclip } from "lucide-react";
 import { useChatStore } from "@/lib/store/use-chat-store";
 import { toast } from "sonner";
 import { ApiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/hooks/use-auth";
+import { cn } from "@/lib/utils/cn";
 
 interface ComposerProps {
   onSend: (message: string) => void;
@@ -20,24 +20,21 @@ export function Composer({ onSend, disabled = false }: ComposerProps) {
   const { idToken } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const canSend = Boolean(input.trim()) && !disabled && !isStreaming;
+
+  const resize = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(
-        textareaRef.current.scrollHeight,
-        200
-      )}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
-  }, [input]);
+  };
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!input.trim() || disabled || isStreaming) return;
+    if (!canSend) return;
     onSend(input.trim());
     setInput("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
+    requestAnimationFrame(resize);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -47,81 +44,73 @@ export function Composer({ onSend, disabled = false }: ComposerProps) {
     }
   };
 
-  const handleAttachClick = () => {
-    fileRef.current?.click();
-  };
-
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     try {
       const result = await ApiClient.uploadDocument(file, idToken || undefined);
-      toast.success(`Ingested ${file.name}`, {
-        description: `${result.chunkCount} chunks written to ChromaDB.`,
+      toast.success(`Added ${file.name}`, {
+        description: `${result.chunkCount} chunks indexed for retrieval.`,
       });
-    } catch (err: any) {
-      toast.error(err.message || "Document ingest failed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Document upload failed");
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto px-4 pb-4">
-      <div className="relative rounded-2xl border border-surface bg-surface p-2.5 shadow-lg focus-within:border-amber-500/50 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all">
+    <div className="mx-auto w-full max-w-[760px] px-6 pb-5 pt-1">
+      <form
+        onSubmit={handleSubmit}
+        className="flex items-end gap-2 rounded-[26px] border border-[var(--border-surface)] bg-[var(--bg-surface)] p-2 shadow-md transition-[border-color,box-shadow] focus-within:border-[var(--accent-primary-border)] focus-within:shadow-[var(--shadow-md),0_0_0_4px_var(--accent-primary-light)]"
+      >
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-ink"
+          title="Attach a PDF, TXT, or Markdown file"
+          aria-label="Attach document"
+        >
+          <Paperclip className="h-4 w-4" />
+        </button>
+        <input ref={fileRef} type="file" accept=".pdf,.txt,.md" className="hidden" onChange={handleFile} />
+
         <textarea
           ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            resize();
+          }}
           onKeyDown={handleKeyDown}
-          placeholder="Ask a multi-hop or technical question... (Watch Planner, Extractor & QA show their work)"
+          placeholder="Ask anything about your documents…"
+          aria-label="Message"
           rows={1}
           disabled={disabled || isStreaming}
-          className="w-full resize-none bg-transparent px-2 py-1 text-sm text-ink placeholder:text-muted focus:outline-none disabled:opacity-50 min-h-[44px] max-h-[200px]"
+          className="max-h-[200px] min-h-[36px] flex-1 resize-none bg-transparent py-2 text-[14px] leading-relaxed text-ink placeholder:text-[var(--text-muted)] focus:outline-none disabled:opacity-60"
         />
 
-        <div className="flex items-center justify-between pt-2 px-2 border-t border-surface/50">
-          <div className="flex items-center space-x-2 text-xs font-mono text-muted">
-            <button
-              type="button"
-              onClick={handleAttachClick}
-              className="p-1.5 rounded-lg hover:bg-amber-500/10 text-muted hover:text-ink transition-colors cursor-pointer"
-              title="Attach Document PDF"
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.txt,.md"
-              className="hidden"
-              onChange={handleFile}
-            />
-            <span className="hidden sm:inline-block text-[11px]">
-              Qwen2.5-32B • Glass-Box Mode Active
-            </span>
-          </div>
-
-          <Button
-            type="submit"
-            size="sm"
-            disabled={!input.trim() || disabled || isStreaming}
-            variant="amber"
-            className="rounded-xl px-3 font-semibold"
-          >
-            {isStreaming ? (
-              <>
-                <StopCircle className="w-4 h-4 mr-1 animate-pulse text-white" />
-                <span>Running...</span>
-              </>
-            ) : (
-              <>
-                <span>Send</span>
-                <Send className="w-3.5 h-3.5 ml-1" />
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </form>
+        <button
+          type="submit"
+          disabled={!canSend}
+          aria-label={isStreaming ? "Running" : "Send message"}
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
+            canSend
+              ? "bg-[var(--accent-primary)] text-[var(--accent-contrast)] hover:bg-[var(--accent-primary-hover)]"
+              : "cursor-not-allowed bg-[var(--bg-subtle)] text-[var(--text-muted)]"
+          )}
+        >
+          {isStreaming ? (
+            <span className="h-3 w-3 animate-pulse rounded-[3px] bg-current" />
+          ) : (
+            <ArrowUp className="h-4 w-4" strokeWidth={2.4} />
+          )}
+        </button>
+      </form>
+      <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
+        Every answer ships with its plan, evidence, and citations. Shift+Enter for a new line.
+      </p>
+    </div>
   );
 }

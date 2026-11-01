@@ -1,101 +1,93 @@
 import React from "react";
 import { Compass, Filter, ShieldCheck } from "lucide-react";
+import { SectionHeading } from "./problem-section";
+import { cn } from "@/lib/utils/cn";
+
+const STEPS = [
+  {
+    step: "01",
+    agent: "Planner",
+    icon: Compass,
+    title: "Break the question down",
+    description:
+      "The question is split into dependent sub-questions. Reference entities are extracted and checked against the plan, along with consistency across repeated attempts.",
+    checks: ["Entity coverage", "Requirement coverage", "Self-consistency"],
+    card: "bg-[var(--accent-primary-light)]",
+    ink: "text-[var(--accent-text)]",
+    num: "text-[var(--accent-primary)]",
+  },
+  {
+    step: "02",
+    agent: "Extractor",
+    icon: Filter,
+    title: "Retrieve, then score twice",
+    description:
+      "Each sub-question retrieves candidates through hybrid search. A chunk is kept only when it clears both a similarity bar and an attribution bar.",
+    checks: ["Hybrid retrieval", "Cross-encoder rank", "Dual-score filter"],
+    card: "bg-[var(--mint)]",
+    ink: "text-[var(--accent-secondary-text)]",
+    num: "text-[#9cc5bf]",
+  },
+  {
+    step: "03",
+    agent: "QA",
+    icon: ShieldCheck,
+    title: "Answer from evidence only",
+    description:
+      "The answer is generated from kept chunks alone, then checked for grounding, mapped to sentence-level citations, and tested with query-entity masking.",
+    checks: ["Grounding score", "Sentence citations", "Erasure test"],
+    card: "bg-[var(--cream)]",
+    ink: "text-[var(--cream-text)]",
+    num: "text-[#f0c88e]",
+  },
+];
 
 export function HowItWorksSection() {
-  const steps = [
-    {
-      stepNum: "01",
-      agent: "Planner Agent",
-      icon: Compass,
-      accentColor: "amber",
-      title: "Decompose & Verify Attention",
-      description:
-        "Extracts query keywords using spaCy/NER, decomposes into sub-questions, and runs an attention focus pass. Retries automatically if keyword attention fails.",
-      verificationChip: "Attention Focus Matrix Check",
-    },
-    {
-      stepNum: "02",
-      agent: "Extractor Agent",
-      icon: Filter,
-      accentColor: "teal",
-      title: "Vector Search & NormEnsembleXAI",
-      description:
-        "Searches ChromaDB per sub-question and scores chunks with ensembled gradient + leave-one-out attribution. Filters low-importance chunks out.",
-      verificationChip: "Attribution Score Threshold Filter",
-    },
-    {
-      stepNum: "03",
-      agent: "QA / Reasoning Agent",
-      icon: ShieldCheck,
-      accentColor: "emerald",
-      title: "Grounded Synthesis & Citation Map",
-      description:
-        "Synthesizes answer solely from verified chunks, calculates Faithfulness Score, and outputs a token/sentence citation heatmap with entity erasure testing.",
-      verificationChip: "Faithfulness & Erasure Verification",
-    },
-  ];
-
   return (
-    <section className="py-24 bg-app">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
-            GLASS-BOX PIPELINE
-          </span>
-          <h2 className="font-display text-3xl sm:text-4xl font-bold text-ink mt-2">
-            How RAGHive Verifies Before It Speaks
-          </h2>
-          <p className="text-muted text-base mt-3">
-            Three autonomous agents working in a transparent pipeline with continuous self-checking loops.
-          </p>
-        </div>
+    <section className="mx-auto max-w-6xl px-5 py-20 lg:px-8 lg:py-28">
+      <SectionHeading
+        center
+        eyebrow="How it works"
+        title="Three agents, each with something to prove."
+        body="Every stage has an explicit check. If a check fails, you see it — and the planner pauses for review rather than continuing quietly."
+      />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-          {steps.map((item, idx) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={idx}
-                className="relative p-8 rounded-2xl border border-surface bg-surface space-y-4 hover:shadow-xl transition-all group"
+      <ol className="mt-14 grid grid-cols-1 gap-4 md:grid-cols-3">
+        {STEPS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <li key={item.step} className={cn("relative overflow-hidden rounded-[28px] p-7", item.card)}>
+              <span
+                className={cn(
+                  "pointer-events-none absolute right-5 top-3 font-display text-[88px] font-semibold leading-none opacity-70",
+                  item.num
+                )}
+                aria-hidden="true"
               >
-                <div className="flex items-center justify-between">
-                  <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      item.accentColor === "amber"
-                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
-                        : item.accentColor === "teal"
-                        ? "bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/30"
-                        : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                    }`}
-                  >
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <span className="font-mono text-2xl font-bold text-muted/40 group-hover:text-amber-500/60 transition-colors">
-                    {item.stepNum}
-                  </span>
-                </div>
+                {item.step}
+              </span>
 
-                <div>
-                  <span className="text-xs font-mono font-semibold text-muted uppercase">
-                    {item.agent}
-                  </span>
-                  <h3 className="font-display font-semibold text-xl text-ink mt-1">
-                    {item.title}
-                  </h3>
-                </div>
+              <span className={cn("relative inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-[12px] font-semibold", item.ink)}>
+                <Icon className="h-3.5 w-3.5" />
+                {item.agent}
+              </span>
 
-                <p className="text-xs text-muted leading-relaxed">{item.description}</p>
+              <h3 className="relative mt-10 font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+                {item.title}
+              </h3>
+              <p className="relative mt-3 text-[13px] leading-relaxed text-[var(--text-secondary)]">{item.description}</p>
 
-                <div className="pt-3 border-t border-surface">
-                  <span className="inline-block text-[11px] font-mono text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20">
-                    ✅ {item.verificationChip}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              <ul className="relative mt-6 flex flex-wrap gap-1.5">
+                {item.checks.map((check) => (
+                  <li key={check} className="rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)]">
+                    {check}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }

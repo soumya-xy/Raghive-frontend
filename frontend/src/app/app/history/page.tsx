@@ -1,254 +1,192 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useChats } from "@/lib/hooks/use-chats";
 import { PageTransition } from "@/components/shared/page-transition";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Search,
-  Grid,
-  List,
-  Pin,
-  Trash2,
-  Download,
-  Filter,
-  MessageSquare,
-  Sparkles,
-  ArrowRight,
-} from "lucide-react";
+import { Search, Pin, Trash2, Download, MessageSquare, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils/cn";
 
 export default function HistoryPage() {
   const { chats, deleteChat } = useChats();
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const filteredChats = chats.filter((c) => {
-    const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase());
-    const matchesPin = !pinnedOnly || c.pinned;
-    return matchesSearch && matchesPin;
-  });
+  const filteredChats = useMemo(
+    () =>
+      chats.filter(
+        (c) => c.title.toLowerCase().includes(search.toLowerCase()) && (!pinnedOnly || c.pinned)
+      ),
+    [chats, search, pinnedOnly]
+  );
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(filteredChats.map((c) => c.id));
-    } else {
-      setSelectedIds([]);
-    }
-  };
+  const allSelected = filteredChats.length > 0 && selectedIds.length === filteredChats.length;
 
-  const handleSelectOne = (id: string) => {
-    if (selectedIds.includes(id)) {
-      setSelectedIds(selectedIds.filter((i) => i !== id));
-    } else {
-      setSelectedIds([...selectedIds, id]);
-    }
-  };
+  const toggleAll = () => setSelectedIds(allSelected ? [] : filteredChats.map((c) => c.id));
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
 
   const handleBulkDelete = async () => {
     for (const id of selectedIds) {
       await deleteChat(id);
     }
-    toast.success(`Deleted ${selectedIds.length} chat sessions.`);
+    toast.success(`Deleted ${selectedIds.length} conversation${selectedIds.length === 1 ? "" : "s"}`);
     setSelectedIds([]);
   };
 
   const handleExportJSON = () => {
-    const exportData = chats.filter((c) => selectedIds.includes(c.id));
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-      type: "application/json",
-    });
+    const payload = chats.filter((c) => selectedIds.includes(c.id));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `raghive-history-export-${Date.now()}.json`;
+    a.download = `raghive-history-${Date.now()}.json`;
     a.click();
-    toast.success(`Exported ${selectedIds.length} sessions as JSON.`);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${payload.length} conversation${payload.length === 1 ? "" : "s"}`);
   };
 
   return (
-    <PageTransition className="flex-1 p-6 overflow-y-auto max-w-7xl mx-auto w-full space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-surface pb-4">
+    <PageTransition className="mx-auto w-full max-w-5xl flex-1 overflow-y-auto px-6 py-8">
+      <div className="flex flex-col gap-3 border-b border-[var(--border-surface)] pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink">Conversation History</h1>
-          <p className="text-xs text-muted font-mono mt-1">
-            Manage, filter, and export verified multi-agent RAG sessions
+          <h1 className="font-display text-[22px] font-semibold tracking-[-0.01em] text-ink">History</h1>
+          <p className="mt-1 text-[13px] text-[var(--text-muted)]">
+            {chats.length} conversation{chats.length === 1 ? "" : "s"} saved.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
-          {selectedIds.length > 0 && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleExportJSON} className="font-mono text-xs">
-                <Download className="w-3.5 h-3.5 mr-1" />
-                Export ({selectedIds.length})
-              </Button>
-              <Button variant="danger" size="sm" onClick={handleBulkDelete} className="font-mono text-xs">
-                <Trash2 className="w-3.5 h-3.5 mr-1" />
-                Delete ({selectedIds.length})
-              </Button>
-            </>
-          )}
-
-          <div className="flex items-center p-1 rounded-lg border border-surface bg-surface">
-            <button
-              onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded cursor-pointer ${
-                viewMode === "table" ? "bg-amber-500/15 text-amber-500" : "text-muted"
-              }`}
-              title="Table view"
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`p-1.5 rounded cursor-pointer ${
-                viewMode === "grid" ? "bg-amber-500/15 text-amber-500" : "text-muted"
-              }`}
-              title="Grid view"
-            >
-              <Grid className="w-4 h-4" />
-            </button>
+        {selectedIds.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportJSON}>
+              <Download className="h-3.5 w-3.5" />
+              Export ({selectedIds.length})
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleBulkDelete}>
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete ({selectedIds.length})
+            </Button>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Filter Strip */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative flex-1 w-full max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-muted" />
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative w-full max-w-sm">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by topic, keyword, or title..."
-            className="pl-9"
+            placeholder="Search conversations"
+            className="pl-8"
           />
         </div>
 
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setPinnedOnly(!pinnedOnly)}
-            className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors cursor-pointer ${
-              pinnedOnly
-                ? "bg-amber-500/15 border-amber-500/40 text-amber-500"
-                : "border-surface bg-surface text-muted"
-            }`}
-          >
-            <Pin className="w-3.5 h-3.5" />
-            <span>Pinned Only</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setPinnedOnly(!pinnedOnly)}
+          aria-pressed={pinnedOnly}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] transition-colors",
+            pinnedOnly
+              ? "border-[var(--accent-primary-border)] bg-[var(--accent-primary-light)] text-[var(--accent-text)]"
+              : "border-[var(--border-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+          )}
+        >
+          <Pin className="h-3 w-3" />
+          Pinned only
+        </button>
       </div>
 
-      {/* Content View */}
       {filteredChats.length === 0 ? (
-        <div className="p-12 text-center border border-surface rounded-2xl bg-surface/50 space-y-3">
-          <MessageSquare className="w-10 h-10 text-muted mx-auto" />
-          <h3 className="font-display font-semibold text-ink">No Sessions Found</h3>
-          <p className="text-xs text-muted">Try adjusting your query or start a new conversation.</p>
+        <div className="mt-8 rounded-xl border border-dashed border-[var(--border-surface)] px-6 py-14 text-center">
+          <MessageSquare className="mx-auto h-6 w-6 text-[var(--text-muted)]" />
+          <p className="mt-3 text-[13px] font-medium text-ink">No conversations found</p>
+          <p className="mt-1 text-[12px] text-[var(--text-muted)]">
+            Try a different search, or start a new conversation.
+          </p>
         </div>
-      ) : viewMode === "table" ? (
-        <div className="rounded-2xl border border-surface bg-surface overflow-hidden shadow-xs">
-          <table className="w-full text-left border-collapse">
+      ) : (
+        <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border-surface)]">
+          <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b border-surface bg-app/50 font-mono text-[11px] text-muted uppercase">
-                <th className="p-4 w-10">
+              <tr className="border-b border-[var(--border-surface)] bg-[var(--bg-subtle)]">
+                <th className="w-9 px-3 py-2">
                   <input
                     type="checkbox"
-                    checked={selectedIds.length === filteredChats.length}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded accent-amber-500"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Select all conversations"
+                    className="h-3.5 w-3.5 rounded accent-[var(--accent-primary)]"
                   />
                 </th>
-                <th className="p-4">Conversation Title</th>
-                <th className="p-4">Last Updated</th>
-                <th className="p-4">Messages</th>
-                <th className="p-4">Avg Faithfulness</th>
-                <th className="p-4 text-right">Actions</th>
+                <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                  Conversation
+                </th>
+                <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                  Updated
+                </th>
+                <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                  Messages
+                </th>
+                <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                  Grounding
+                </th>
+                <th className="w-10 px-3 py-2" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-surface text-xs font-mono">
+            <tbody className="divide-y divide-[var(--border-surface)] bg-[var(--bg-surface)]">
               {filteredChats.map((chat) => (
-                <tr key={chat.id} className="hover:bg-amber-500/5 transition-colors group">
-                  <td className="p-4">
+                <tr key={chat.id} className="group transition-colors hover:bg-[var(--bg-subtle)]/60">
+                  <td className="px-3 py-2.5">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(chat.id)}
-                      onChange={() => handleSelectOne(chat.id)}
-                      className="rounded accent-amber-500"
+                      onChange={() => toggleOne(chat.id)}
+                      aria-label={`Select ${chat.title}`}
+                      className="h-3.5 w-3.5 rounded accent-[var(--accent-primary)]"
                     />
                   </td>
-                  <td className="p-4 font-sans font-semibold text-ink">
+                  <td className="px-3 py-2.5">
                     <Link
                       href={`/app/chat/${chat.id}`}
-                      className="hover:text-amber-500 transition-colors flex items-center space-x-2"
+                      className="flex items-center gap-1.5 text-[13px] text-ink hover:text-[var(--accent-text)] transition-colors"
                     >
-                      {chat.pinned && <Pin className="w-3 h-3 text-amber-500" />}
-                      <span>{chat.title}</span>
+                      {chat.pinned && <Pin className="h-3 w-3 shrink-0 text-[var(--accent-text)]" />}
+                      <span className="truncate max-w-[42ch]">{chat.title}</span>
                     </Link>
                   </td>
-                  <td className="p-4 text-muted">
+                  <td className="px-3 py-2.5 text-[12px] text-[var(--text-muted)] tabular">
                     {new Date(chat.updatedAt).toLocaleDateString()}
                   </td>
-                  <td className="p-4 text-ink">{chat.messageCount} msgs</td>
-                  <td className="p-4">
-                    {chat.avgFaithfulness ? (
-                      <Badge variant="success">
-                        <Sparkles className="w-3 h-3 mr-1" />
+                  <td className="px-3 py-2.5 text-[12px] text-[var(--text-secondary)] tabular">
+                    {chat.messageCount}
+                  </td>
+                  <td className="px-3 py-2.5 text-[12px] tabular">
+                    {chat.avgFaithfulness != null ? (
+                      <span className="text-[var(--text-secondary)]">
                         {Math.round(chat.avgFaithfulness * 100)}%
-                      </Badge>
+                      </span>
                     ) : (
-                      <span className="text-muted">—</span>
+                      <span className="text-[var(--text-muted)]">—</span>
                     )}
                   </td>
-                  <td className="p-4 text-right">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/app/chat/${chat.id}`}>
-                        <span>Open</span>
-                        <ArrowRight className="w-3 h-3 ml-1" />
-                      </Link>
-                    </Button>
+                  <td className="px-3 py-2.5">
+                    <Link
+                      href={`/app/chat/${chat.id}`}
+                      className="inline-flex text-[var(--text-muted)] opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
+                      aria-label={`Open ${chat.title}`}
+                    >
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {filteredChats.map((chat) => (
-            <div
-              key={chat.id}
-              className="p-5 rounded-2xl border border-surface bg-surface hover:border-amber-500/30 transition-all flex flex-col justify-between space-y-4 shadow-xs group"
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-muted">
-                    {new Date(chat.updatedAt).toLocaleDateString()}
-                  </span>
-                  {chat.pinned && <Pin className="w-3.5 h-3.5 text-amber-500" />}
-                </div>
-                <h3 className="font-display font-semibold text-sm text-ink group-hover:text-amber-500 transition-colors line-clamp-2">
-                  {chat.title}
-                </h3>
-              </div>
-
-              <div className="pt-3 border-t border-surface flex items-center justify-between">
-                <span className="text-xs font-mono text-muted">{chat.messageCount} messages</span>
-                <Button asChild variant="outline" size="sm" className="font-mono text-xs">
-                  <Link href={`/app/chat/${chat.id}`}>
-                    <span>View Trace</span>
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </PageTransition>

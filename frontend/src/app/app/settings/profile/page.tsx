@@ -8,12 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { toast } from "sonner";
-import { User, Mail, Save } from "lucide-react";
 
 export default function ProfileSettingsPage() {
   const { idToken } = useAuth();
   const { displayName: savedName, email, refresh } = useProfile();
-  // Local draft only while the user is editing; null means "show the saved name".
   const [draft, setDraft] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +28,7 @@ export default function ProfileSettingsPage() {
       await ApiClient.updateProfile(name, idToken || undefined);
       setDraft(null);
       await refresh();
-      toast.success("Profile details updated successfully!");
+      toast.success("Profile updated");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Could not save profile.");
     } finally {
@@ -39,52 +37,51 @@ export default function ProfileSettingsPage() {
   };
 
   return (
-    <Card className="max-w-2xl">
+    <Card>
       <CardHeader>
-        <CardTitle>User Profile</CardTitle>
-        <CardDescription>
-          Manage your personal details and academic credentials displayed across sessions
-        </CardDescription>
+        <CardTitle>Profile</CardTitle>
+        <CardDescription>How your name appears in the workspace.</CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-4">
-        <div className="flex items-center space-x-4 pb-4 border-b border-surface">
-          <div className="w-16 h-16 rounded-full bg-amber-500/20 border-2 border-amber-500/40 flex items-center justify-center text-amber-500 font-mono font-bold text-xl">
-            {savedName[0] || "R"}
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--accent-primary-border)] bg-[var(--accent-primary-light)] text-[13px] font-medium text-[var(--accent-text)]">
+            {savedName ? savedName.trim()[0]?.toUpperCase() : "R"}
           </div>
-          <div>
-            <h4 className="font-display font-semibold text-ink text-base">{savedName}</h4>
-            <p className="text-xs font-mono text-muted">{email || "researcher@lnmiit.ac.in"}</p>
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs font-mono font-medium text-ink">Display Name</label>
-          <div className="relative">
-            <User className="w-4 h-4 absolute left-3 top-3 text-muted" />
-            <Input
-              value={shownName}
-              onChange={(e) => setDraft(e.target.value)}
-              className="pl-9"
-            />
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium text-ink">{savedName || "Researcher"}</p>
+            <p className="truncate text-[12px] text-[var(--text-muted)]">
+              {email || "No email on file"}
+            </p>
           </div>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-xs font-mono font-medium text-ink">Email Address (Read-only)</label>
-          <div className="relative">
-            <Mail className="w-4 h-4 absolute left-3 top-3 text-muted" />
-            <Input
-              value={email || "researcher@lnmiit.ac.in"}
-              disabled
-              className="pl-9 opacity-70 cursor-not-allowed"
-            />
-          </div>
+        <div className="space-y-1.5">
+          <label htmlFor="display-name" className="text-[12px] font-medium text-[var(--text-secondary)]">
+            Display name
+          </label>
+          <Input
+            id="display-name"
+            value={shownName}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Your name"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="email" className="text-[12px] font-medium text-[var(--text-secondary)]">
+            Email
+          </label>
+          <Input id="email" value={email || ""} disabled placeholder="Not available" />
+          <p className="text-[11px] text-[var(--text-muted)]">
+            Email changes are handled by your identity provider.
+          </p>
         </div>
       </CardContent>
+
       <CardFooter>
-        <Button variant="amber" onClick={handleSave} disabled={loading} className="font-semibold">
-          <Save className="w-4 h-4 mr-2" />
-          Save Changes
+        <Button variant="primary" size="sm" onClick={handleSave} disabled={loading}>
+          {loading ? "Saving…" : "Save changes"}
         </Button>
       </CardFooter>
     </Card>

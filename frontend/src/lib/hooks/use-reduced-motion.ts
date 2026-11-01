@@ -1,19 +1,20 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
-export function useReducedMotion() {
-  const [matches, setMatches] = useState(false);
+const QUERY = "(prefers-reduced-motion: reduce)";
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setMatches(mediaQuery.matches);
+function subscribe(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const mediaQuery = window.matchMedia(QUERY);
+  mediaQuery.addEventListener("change", callback);
+  return () => mediaQuery.removeEventListener("change", callback);
+}
 
-    const listener = (event: MediaQueryListEvent) => {
-      setMatches(event.matches);
-    };
+function getSnapshot() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia(QUERY).matches;
+}
 
-    mediaQuery.addEventListener("change", listener);
-    return () => mediaQuery.removeEventListener("change", listener);
-  }, []);
-
-  return matches;
+/** Tracks the OS "reduce motion" setting without setState-in-effect. */
+export function useReducedMotion(): boolean {
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }

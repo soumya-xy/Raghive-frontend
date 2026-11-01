@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { PlannerTrace } from "@/lib/api/types";
 import { Button } from "../ui/button";
-import { ShieldAlert, Check, RefreshCw, Pencil } from "lucide-react";
+import { AlertTriangle, Check, RefreshCw, Pencil } from "lucide-react";
 
 interface HitlPanelProps {
   plan: PlannerTrace | null;
@@ -21,25 +21,23 @@ export function HitlPanel({ plan, busy, onApprove, onRegenerate, onEdit }: HitlP
   if (!plan) return null;
 
   return (
-    <div className="w-full max-w-3xl mx-auto mb-3 px-4">
-      <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-3">
-        <div className="flex items-start space-x-2">
-          <ShieldAlert className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-mono text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
-              Human review required
-            </p>
-            <p className="text-xs text-ink mt-1">
-              Planner verification failed after one retry. Approve the plan, edit a sub-question, or regenerate.
-              The pipeline will not continue on its own.
+    <div className="w-full max-w-[760px] mx-auto mb-2 px-6">
+      <div className="rounded-2xl border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)]">
+        <div className="flex items-start gap-2.5 px-3.5 py-3">
+          <AlertTriangle className="w-4 h-4 text-[var(--status-warning)] mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-[var(--status-warning)]">Review required</p>
+            <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+              Planner verification failed after one retry. Approve, edit a step, or regenerate — the
+              pipeline will not continue on its own.
             </p>
           </div>
         </div>
 
-        <ol className="space-y-2 pl-1">
+        <ol className="px-3.5 pb-1 space-y-1.5">
           {(editing ? drafts : plan.steps.map((s) => s.text)).map((text, idx) => (
-            <li key={plan.steps[idx]?.id || idx} className="flex items-start space-x-2">
-              <span className="w-5 h-5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-mono font-bold flex items-center justify-center shrink-0 mt-0.5">
+            <li key={plan.steps[idx]?.id || idx} className="flex items-start gap-2">
+              <span className="mt-0.5 flex h-4 w-4 items-center justify-center rounded bg-[var(--bg-surface)] border border-[var(--status-warning-border)] text-[10px] font-medium text-[var(--status-warning)] shrink-0 tabular">
                 {idx + 1}
               </span>
               {editing ? (
@@ -50,40 +48,34 @@ export function HitlPanel({ plan, busy, onApprove, onRegenerate, onEdit }: HitlP
                     next[idx] = e.target.value;
                     setDrafts(next);
                   }}
-                  className="flex-1 text-xs rounded-lg border border-surface bg-surface p-2 text-ink"
                   rows={2}
+                  className="flex-1 text-[12px] rounded-md border border-[var(--border-surface)] bg-[var(--bg-surface)] p-1.5 text-ink focus:outline-none focus:border-[var(--accent-ring)]"
                 />
               ) : (
-                <span className="text-xs text-ink">{text}</span>
+                <span className="text-[12px] text-[var(--text-secondary)] leading-snug">{text}</span>
               )}
             </li>
           ))}
         </ol>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button size="sm" variant="amber" disabled={busy} onClick={onApprove} className="font-semibold">
-            <Check className="w-3.5 h-3.5 mr-1" />
-            Approve plan
+        <div className="flex flex-wrap gap-1.5 px-3.5 pb-3 pt-2">
+          <Button size="sm" variant="primary" disabled={busy} onClick={onApprove}>
+            <Check className="w-3.5 h-3.5" />
+            Approve
           </Button>
           {editing ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => onEdit(drafts)}
-              className="font-semibold"
-            >
-              <Pencil className="w-3.5 h-3.5 mr-1" />
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => onEdit(drafts)}>
+              <Pencil className="w-3.5 h-3.5" />
               Submit edits
             </Button>
           ) : (
             <Button size="sm" variant="outline" disabled={busy} onClick={() => setEditing(true)}>
-              <Pencil className="w-3.5 h-3.5 mr-1" />
-              Edit sub-questions
+              <Pencil className="w-3.5 h-3.5" />
+              Edit steps
             </Button>
           )}
-          <Button size="sm" variant="outline" disabled={busy} onClick={onRegenerate}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+          <Button size="sm" variant="ghost" disabled={busy} onClick={onRegenerate}>
+            <RefreshCw className="w-3.5 h-3.5" />
             Regenerate
           </Button>
         </div>

@@ -12,6 +12,9 @@ interface InlineVerificationBarProps {
   trace?: ReasoningTrace | null;
 }
 
+const chip = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium";
+
+/** Compact, factual summary chips. They report values; they do not assert success. */
 export function InlineVerificationBar({ messageId, trace }: InlineVerificationBarProps) {
   const { setTracePanelOpen } = useUIStore();
   const { setActiveTrace, setActiveMessageId } = useChatStore();
@@ -24,72 +27,60 @@ export function InlineVerificationBar({ messageId, trace }: InlineVerificationBa
     setTracePanelOpen(true);
   };
 
-  const uniqueKeptChunkIds = new Set(
-    trace.extractor?.subQueries
-      ?.flatMap((sq) => sq?.chunks || [])
-      ?.filter((c) => c?.keptForReasoning)
-      ?.map((c) => c?.id)
-      ?.filter(Boolean) || []
+  const keptChunkIds = new Set(
+    trace.extractor?.subQueries?.flatMap((sq) => sq?.chunks || []).filter((c) => c?.keptForReasoning).map((c) => c?.id) || []
   );
-  const keptChunksCount = uniqueKeptChunkIds.size;
 
   const faithfulnessPct =
-    trace.qa?.faithfulnessScore != null
-      ? Math.round(trace.qa.faithfulnessScore * 100)
-      : null;
+    trace.qa?.faithfulnessScore != null ? Math.round(trace.qa.faithfulnessScore * 100) : null;
+  const planStatus = trace.planner?.verificationChecks
+    ? Object.values(trace.planner.verificationChecks).filter((c) => c?.status === "FAIL").length > 0
+      ? "failed"
+      : "passed"
+    : null;
 
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl border border-surface bg-surface/60 text-xs font-mono">
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Planner chip */}
-        {trace.planner && (
-          <div className="flex items-center space-x-1.5 text-amber-600 dark:text-amber-400">
-            <Compass className="w-3.5 h-3.5" />
-            <span className="font-semibold">
-              {(trace.planner as any)?.routeDecision?.fast_path ? "⚡ Fast Path ✅" : "Plan ✅"}
-            </span>
-          </div>
-        )}
+    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+      {trace.planner && (
+        <span className={cn(chip, "bg-[var(--accent-primary-light)] text-[var(--accent-text)]")}>
+          <Compass className="h-3 w-3" />
+          Plan{planStatus ? ` ${planStatus}` : ""}
+        </span>
+      )}
 
-        {trace.planner && trace.extractor && <span className="text-muted">•</span>}
+      {trace.extractor && (
+        <span className={cn(chip, "bg-[var(--mint)] text-[var(--accent-secondary-text)]")}>
+          <Filter className="h-3 w-3" />
+          <span className="tabular">{keptChunkIds.size}</span> chunks kept
+        </span>
+      )}
 
-        {/* Extractor chip */}
-        {trace.extractor && (
-          <div className="flex items-center space-x-1.5 text-teal-600 dark:text-teal-400">
-            <Filter className="w-3.5 h-3.5" />
-            <span className="font-semibold">{keptChunksCount} Evidence Chunks ✅</span>
-          </div>
-        )}
+      {trace.qa && faithfulnessPct !== null && (
+        <span
+          className={cn(
+            chip,
+            faithfulnessPct >= 85
+              ? "bg-[var(--status-success-bg)] text-[var(--status-success)]"
+              : faithfulnessPct >= 70
+              ? "bg-[var(--cream)] text-[var(--cream-text)]"
+              : "bg-[var(--status-danger-bg)] text-[var(--status-danger)]"
+          )}
+          title="Attention-based grounding estimate (see trace for details)"
+        >
+          <ShieldCheck className="h-3 w-3" />
+          <span className="tabular">{faithfulnessPct}%</span> grounding
+        </span>
+      )}
 
-        {(trace.planner || trace.extractor) && trace.qa && faithfulnessPct !== null && (
-          <span className="text-muted">•</span>
-        )}
-
-        {/* QA Faithfulness chip */}
-        {trace.qa && faithfulnessPct !== null && (
-          <div
-            className={cn(
-              "flex items-center space-x-1.5 font-bold",
-              faithfulnessPct >= 85
-                ? "text-emerald-600 dark:text-emerald-400"
-                : faithfulnessPct >= 70
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-rose-600 dark:text-rose-400"
-            )}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>{faithfulnessPct}% Grounded</span>
-          </div>
-        )}
-      </div>
-
-      {/* Expand Full Trace CTA */}
       <button
         onClick={handleOpenTrace}
-        className="inline-flex items-center space-x-1 font-sans text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:underline cursor-pointer group transition-all"
+        className={cn(
+          chip,
+          "border border-[var(--border-surface)] text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-primary-border)] hover:text-[var(--accent-text)]"
+        )}
       >
-        <span>View full reasoning trace</span>
-        <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+        View trace
+        <ArrowRight className="h-3 w-3" />
       </button>
     </div>
   );

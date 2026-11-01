@@ -1,12 +1,18 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiClient } from "../api/client";
+import { ChatSummary, Message } from "../api/types";
 import { useAuth } from "./use-auth";
+
+interface ChatDetail {
+  chat: ChatSummary | null;
+  messages: Message[];
+}
 
 export function useMessages(chatId: string | null) {
   const { idToken } = useAuth();
   const queryClient = useQueryClient();
 
-  const messagesQuery = useQuery<{ chat: any; messages: any[] }>({
+  const messagesQuery = useQuery<ChatDetail>({
     queryKey: ["messages", chatId, idToken],
     queryFn: async () => {
       if (!chatId) return { chat: null, messages: [] };

@@ -1,63 +1,90 @@
+/*
+ * RAGHive design tokens — light only.
+ *
+ * Brand palette:
+ *   Lavender #9FA0FF — primary accent (fills, highlights, focus)
+ *   Mint     #D5E8E6 — secondary surface, Extractor stage, success
+ *   Cream    #FFF3E3 — warm surface, QA stage, warnings
+ *   Coral    #FF7171 — attention and danger
+ *
+ * The pastels are too light to carry text on white, so each has a deeper
+ * "ink" shade for text and icons. Every text pair below meets WCAG AA.
+ */
 :root {
-  --bg-app: #FAF8F4;
-  --bg-surface: #FFFFFF;
-  --border-surface: #E8E2D6;
-  --text-ink: #1C1A16;
-  --text-muted: #6B6357;
-  
-  --accent-primary: #D97706;
-  --accent-primary-hover: #B45309;
-  --accent-primary-light: rgba(217, 119, 6, 0.1);
-  
-  --accent-secondary: #0F766E;
-  --accent-secondary-hover: #0D655E;
-  --accent-secondary-light: rgba(15, 118, 110, 0.1);
-  
-  --status-success: #15803D;
-  --status-success-bg: rgba(21, 128, 61, 0.1);
-  --status-warning: #B45309;
-  --status-warning-bg: rgba(180, 83, 9, 0.1);
-  --status-danger: #B91C1C;
-  --status-danger-bg: rgba(185, 28, 28, 0.1);
-  
-  --hex-pattern-color: #E8E2D6;
+  /* Brand */
+  --lavender: #9fa0ff;
+  --mint: #d5e8e6;
+  --cream: #fff3e3;
+  --coral: #ff7171;
+
+  /* Surfaces */
+  --bg-app: #fbfaf8;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f5f4f1;
+  --bg-sidebar: #f8f7f4;
+  --bg-inverse: #1f1d2b;
+
+  /* Lines */
+  --border-surface: #ecebe6;
+  --border-strong: #dad8d1;
+
+  /* Text */
+  --text-ink: #1f1d2b;       /* 16:1 on white */
+  --text-secondary: #4d4a5c; /* 8.7:1 */
+  --text-muted: #75727f;     /* 4.7:1 */
+
+  /* Accent — lavender */
+  --accent-primary: #9fa0ff;        /* fills, bars, dots */
+  --accent-primary-hover: #8a8bf5;  /* fill hover */
+  --accent-primary-light: #efefff;  /* tinted backgrounds */
+  --accent-primary-border: #d6d6ff;
+  --accent-contrast: #1f1d4d;       /* text on a lavender fill — 7:1 */
+  --accent-text: #4b4dc8;           /* lavender for text/icons — 6.6:1 */
+  --accent-text-strong: #3a3ba8;
+  --accent-ring: #7b7cf0;           /* focus rings and selected borders — 3.5:1 */
+
+  /* Secondary — mint (Extractor) */
+  --accent-secondary: #5e9c94;
+  --accent-secondary-hover: #437f77;
+  --accent-secondary-light: #d5e8e6;
+  --accent-secondary-border: #b4d5d1;
+  --accent-secondary-text: #2e6a63;
+
+  /* Cream (QA, warm surfaces) */
+  --cream-surface: #fff3e3;
+  --cream-border: #f5ddba;
+  --cream-text: #9a5a0f;
+
+  /* Semantic status */
+  --status-success: #2e6a63;
+  --status-success-bg: #e6f2f0;
+  --status-success-border: #b4d5d1;
+
+  --status-warning: #9a5a0f;
+  --status-warning-bg: #fff3e3;
+  --status-warning-border: #f5ddba;
+
+  --status-danger: #c23b3b;
+  --status-danger-bg: #ffecec;
+  --status-danger-border: #ffc9c9;
+  --status-danger-fill: #ff7171;
+  --status-danger-contrast: #4a1414;
+
+  /* Elevation — neutral, very soft */
+  --shadow-xs: 0 1px 2px rgba(31, 29, 43, 0.04);
+  --shadow-sm: 0 1px 3px rgba(31, 29, 43, 0.06), 0 1px 2px rgba(31, 29, 43, 0.03);
+  --shadow-md: 0 6px 16px rgba(31, 29, 43, 0.06), 0 1px 3px rgba(31, 29, 43, 0.04);
+  --shadow-lg: 0 18px 44px rgba(31, 29, 43, 0.08), 0 2px 8px rgba(31, 29, 43, 0.04);
+  --shadow-glow: 0 10px 30px rgba(159, 160, 255, 0.35);
+
+  /* Decorative */
+  --grid-line: #ecebe6;
 }
 
-.dark {
-  --bg-app: #12100D;
-  --bg-surface: #1C1914;
-  --border-surface: #2E2A22;
-  --text-ink: #F2EEE5;
-  --text-muted: #9B9384;
-  
-  --accent-primary: #F59E0B;
-  --accent-primary-hover: #D97706;
-  --accent-primary-light: rgba(245, 158, 11, 0.15);
-  
-  --accent-secondary: #2DD4BF;
-  --accent-secondary-hover: #14B8A6;
-  --accent-secondary-light: rgba(45, 212, 191, 0.15);
-  
-  --status-success: #4ADE80;
-  --status-success-bg: rgba(74, 222, 128, 0.12);
-  --status-warning: #FBBF24;
-  --status-warning-bg: rgba(251, 191, 36, 0.12);
-  --status-danger: #F87171;
-  --status-danger-bg: rgba(248, 113, 113, 0.12);
-  
-  --hex-pattern-color: #2E2A22;
-}
-
-/* Background hex grid pattern */
-.bg-hex-grid {
-  background-image: radial-gradient(var(--hex-pattern-color) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-/* Custom scrollbars */
+/* Custom scrollbars — thin, neutral, unobtrusive */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -65,10 +92,13 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-surface);
+  background: #dedcd5;
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: #c4c1b8;
+  background-clip: content-box;
 }

@@ -76,7 +76,7 @@ export interface StreamEvent {
     | "error";
   agent?: string;
   status?: string;
-  data?: any;
+  data?: unknown;
   messageId?: string;
   message?: string;
   pending?: boolean;

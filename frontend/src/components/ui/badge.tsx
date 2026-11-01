@@ -2,23 +2,29 @@ import * as React from "react";
 import { cn } from "@/lib/utils/cn";
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "amber" | "teal" | "success" | "warning" | "danger" | "outline";
+  variant?: "neutral" | "accent" | "teal" | "success" | "warning" | "danger" | "outline";
 }
 
-function Badge({ className, variant = "amber", ...props }: BadgeProps) {
+function Badge({ className, variant = "neutral", ...props }: BadgeProps) {
   const variants = {
-    amber: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
-    teal: "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30",
-    success: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
-    warning: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
-    danger: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
-    outline: "border-surface text-muted bg-transparent",
+    neutral:
+      "bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border-surface)]",
+    accent:
+      "bg-[var(--accent-primary-light)] text-[var(--accent-text)] border-[var(--accent-primary-border)]",
+    teal: "bg-[var(--accent-secondary-light)] text-[var(--accent-secondary-text)] border-[var(--accent-secondary-border)]",
+    success:
+      "bg-[var(--status-success-bg)] text-[var(--status-success)] border-[var(--status-success-border)]",
+    warning:
+      "bg-[var(--status-warning-bg)] text-[var(--status-warning)] border-[var(--status-warning-border)]",
+    danger:
+      "bg-[var(--status-danger-bg)] text-[var(--status-danger)] border-[var(--status-danger-border)]",
+    outline: "border-[var(--border-strong)] text-[var(--text-secondary)] bg-transparent",
   }[variant];
 
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors font-mono tracking-tight",
+        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-5 tracking-tight",
         variants,
         className
       )}

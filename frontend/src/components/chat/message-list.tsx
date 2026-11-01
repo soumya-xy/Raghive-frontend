@@ -18,7 +18,7 @@ export function MessageList({ messages, onSelectPrompt }: MessageListProps) {
   const { isStreaming, streamingAnswerText } = useChatStore();
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, streamingAnswerText, isStreaming]);
 
   if (messages.length === 0 && !isStreaming) {
@@ -26,32 +26,29 @@ export function MessageList({ messages, onSelectPrompt }: MessageListProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 max-w-4xl mx-auto w-full">
-      {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
-      ))}
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-[760px] space-y-8 px-6 pb-8 pt-4">
+        {messages.map((msg) => (
+          <MessageBubble key={msg.id} message={msg} />
+        ))}
 
-      {/* Live Answer Streaming Block with Rich Markdown */}
-      {isStreaming && streamingAnswerText && (
-        <div className="flex items-start space-x-3 mb-8 max-w-3xl animate-in fade-in-50">
-          <div className="p-1 rounded-xl bg-surface border border-surface shadow-xs shrink-0 mt-1">
-            <HexMark size="sm" glow />
-          </div>
-
-          <div className="flex-1 min-w-0 space-y-2">
-            <div className="flex items-center space-x-2">
-              <span className="font-display font-semibold text-xs text-ink">RAGHive Agent</span>
-              <span className="text-[10px] font-mono text-amber-500 animate-pulse">
-                Generating Synthesized Answer...
-              </span>
+        {isStreaming && streamingAnswerText && (
+          <div className="flex gap-3.5 animate-in fade-in-50">
+            <div className="mt-0.5 shrink-0">
+              <HexMark size="md" />
             </div>
-
-            <MarkdownRenderer content={streamingAnswerText} isStreaming={true} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-semibold text-ink">RAGHive</span>
+                <span className="text-[11px] text-[var(--text-muted)]">writing…</span>
+              </div>
+              <MarkdownRenderer content={streamingAnswerText} isStreaming />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div ref={bottomRef} />
+        <div ref={bottomRef} />
+      </div>
     </div>
   );
 }

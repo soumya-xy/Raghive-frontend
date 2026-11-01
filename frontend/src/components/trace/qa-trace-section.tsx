@@ -2,7 +2,7 @@
 
 import React from "react";
 import { QATrace } from "@/lib/api/types";
-import { ShieldCheck, ShieldAlert, CheckCircle2, XCircle, Sparkles } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Check, X } from "lucide-react";
 import { CitationHeatmap } from "./citation-heatmap";
 import { cn } from "@/lib/utils/cn";
 
@@ -11,126 +11,88 @@ interface QATraceSectionProps {
 }
 
 export function QATraceSection({ trace }: QATraceSectionProps) {
-  const faithfulnessPercent = Math.round(trace.faithfulnessScore * 100);
+  const pct = Math.round(trace.faithfulnessScore * 100);
+  const tone =
+    pct >= 85 ? "success" : pct >= 70 ? "warning" : "danger";
 
   return (
-    <div className="space-y-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-ink">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-            <ShieldCheck className="w-4 h-4" />
-          </div>
+    <section className="rounded-lg border border-[var(--border-surface)] bg-[var(--bg-surface)]">
+      <header className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-[var(--border-surface)]">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-[var(--status-success)]" />
           <div>
-            <h4 className="font-display font-semibold text-sm">3. QA / Reasoning Agent</h4>
-            <p className="text-[11px] text-muted font-mono">
-              Synthesis & Faithfulness Grounding
-            </p>
+            <h4 className="text-[12px] font-semibold text-ink leading-none">QA / Reasoning</h4>
+            <p className="text-[10px] text-[var(--text-muted)] mt-1">Grounded synthesis</p>
           </div>
         </div>
-
         <span
           className={cn(
-            "text-xs font-mono font-bold px-2.5 py-1 rounded-full border shadow-xs flex items-center space-x-1",
-            faithfulnessPercent >= 85
-              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
-              : faithfulnessPercent >= 70
-              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
-              : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30"
+            "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium tabular",
+            tone === "success" && "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success)]",
+            tone === "warning" && "border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]",
+            tone === "danger" && "border-[var(--status-danger-border)] bg-[var(--status-danger-bg)] text-[var(--status-danger)]"
           )}
         >
-          <Sparkles className="w-3 h-3 mr-1" />
-          <span>{faithfulnessPercent}% Grounded</span>
+          {pct}% grounded
         </span>
-      </div>
+      </header>
 
-      {/* Low Grounding Warning Banner */}
-      {trace.belowGroundingThreshold && (
-        <div className="p-3 rounded-lg border border-rose-500/40 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-300 flex items-start space-x-2">
-          <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-semibold font-mono uppercase tracking-wider text-[10px]">
-              Low Grounding Caution:
-            </span>
-            <p className="mt-0.5 text-[11px]">
-              Faithfulness fell below strict grounding threshold (70%). Portions of this answer may rely on parametric memory rather than verified document evidence.
+      <div className="p-3 space-y-3">
+        {trace.belowGroundingThreshold && (
+          <div className="flex items-start gap-2 rounded-md border border-[var(--status-danger-border)] bg-[var(--status-danger-bg)] px-2.5 py-2">
+            <ShieldAlert className="w-3.5 h-3.5 mt-0.5 text-[var(--status-danger)] shrink-0" />
+            <div>
+              <p className="text-[11px] font-medium text-[var(--status-danger)]">Below grounding threshold</p>
+              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-snug">
+                Part of this answer may not be supported by the retrieved evidence.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-md border border-[var(--border-surface)] px-2.5 py-2">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[11px] text-[var(--text-secondary)]">Faithfulness</span>
+            <span className="text-[12px] font-medium text-ink tabular">{pct}%</span>
+          </div>
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--bg-subtle)]">
+            <div
+              className={cn(
+                "h-full rounded-full transition-[width] duration-500",
+                tone === "success" && "bg-[var(--status-success)]",
+                tone === "warning" && "bg-[var(--status-warning)]",
+                tone === "danger" && "bg-[var(--status-danger-fill)]"
+              )}
+              style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-[10px] text-[var(--text-muted)] leading-snug">
+            Attention-based estimate from the evidence-attention pass, not a per-claim check.
+          </p>
+        </div>
+
+        <CitationHeatmap qa={trace} />
+
+        <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--border-surface)] px-2.5 py-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-ink">Erasure test</p>
+            <p className="text-[10px] text-[var(--text-muted)] leading-snug">
+              Query entities masked; answer similarity compared.
             </p>
           </div>
-        </div>
-      )}
-
-      {/* Faithfulness Radial Gauge */}
-      <div className="p-3 rounded-xl border border-surface bg-surface flex items-center justify-between">
-        <div>
-          <span className="text-xs font-mono text-muted uppercase tracking-wider">
-            Faithfulness Grounding Index
-          </span>
-          <p className="text-xs text-ink mt-0.5">
-            Ratio of synthesized tokens backed by verified vector evidence.
-          </p>
-        </div>
-
-        <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
-          <svg className="w-full h-full transform -rotate-90">
-            <circle
-              cx="28"
-              cy="28"
-              r="22"
-              className="stroke-surface"
-              strokeWidth="4"
-              fill="transparent"
-            />
-            <circle
-              cx="28"
-              cy="28"
-              r="22"
-              className={cn(
-                "transition-all duration-1000 ease-out",
-                faithfulnessPercent >= 85
-                  ? "stroke-emerald-500"
-                  : faithfulnessPercent >= 70
-                  ? "stroke-amber-500"
-                  : "stroke-rose-500"
-              )}
-              strokeWidth="4"
-              strokeDasharray={138}
-              strokeDashoffset={138 - (138 * faithfulnessPercent) / 100}
-              strokeLinecap="round"
-              fill="transparent"
-            />
-          </svg>
-          <span className="absolute font-mono text-xs font-bold text-ink">
-            {faithfulnessPercent}%
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+              trace.erasureTestChanged
+                ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success)]"
+                : "border-[var(--status-danger-border)] bg-[var(--status-danger-bg)] text-[var(--status-danger)]"
+            )}
+          >
+            {trace.erasureTestChanged ? <Check className="w-2.5 h-2.5" /> : <X className="w-2.5 h-2.5" />}
+            {trace.erasureTestChanged ? "changed" : "unchanged"}
           </span>
         </div>
       </div>
-
-      {/* Citation Heatmap */}
-      <CitationHeatmap qa={trace} />
-
-      {/* Erasure Test Signal */}
-      <div className="p-3 rounded-xl border border-surface bg-surface flex items-center justify-between text-xs">
-        <div className="space-y-0.5">
-          <span className="font-mono text-[11px] font-semibold text-ink">
-            Counterfactual Term Erasure Test
-          </span>
-          <p className="text-[11px] text-muted">
-            Masked core query entities and tested if generated answer changed.
-          </p>
-        </div>
-
-        {trace.erasureTestChanged ? (
-          <span className="inline-flex items-center text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/30">
-            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-            PASSED (Answer Changed)
-          </span>
-        ) : (
-          <span className="inline-flex items-center text-[10px] font-mono font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/30">
-            <XCircle className="w-3.5 h-3.5 mr-1" />
-            FAILED (Hallucination Signal)
-          </span>
-        )}
-      </div>
-    </div>
+    </section>
   );
 }

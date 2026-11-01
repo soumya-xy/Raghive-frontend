@@ -12,16 +12,15 @@ import { useAuth } from "@/lib/hooks/use-auth";
 import { signUpWithEmail } from "@/lib/firebase/auth";
 import { USE_MOCK_API } from "@/lib/api/mock/mock-mode";
 import { toast } from "sonner";
-import { User, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 
 const signUpSchema = z
   .object({
     name: z.string().min(2, "Name must be at least 2 characters"),
-    email: z.string().email("Please enter a valid email address"),
+    email: z.string().email("Enter a valid email address"),
     password: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string(),
     terms: z.boolean().refine((val) => val === true, {
-      message: "You must accept the research license terms",
+      message: "You must accept the terms to continue",
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -40,138 +39,117 @@ export default function SignUpPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<SignUpForm>({
-    resolver: zodResolver(signUpSchema),
-  });
+  } = useForm<SignUpForm>({ resolver: zodResolver(signUpSchema) });
 
   const onSubmit = async (data: SignUpForm) => {
     setLoading(true);
     try {
       if (USE_MOCK_API) {
         mockLogin(data.name, data.email);
-        toast.success("Account created successfully (Mock Mode)");
+        toast.success("Account created (mock mode)");
       } else {
         await signUpWithEmail(data.email, data.password, data.name);
-        toast.success("Welcome to RAGHive!");
+        toast.success("Welcome to RAGHive");
       }
       router.push("/app/chat");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create account.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not create the account.");
     } finally {
       setLoading(false);
     }
   };
 
+  const fieldError = (message?: string) =>
+    message ? <p className="text-[11px] text-[var(--status-danger)]">{message}</p> : null;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-ink">Create RAGHive Account</h1>
-        <p className="text-xs text-muted mt-1 font-mono">
-          Join the transparent glass-box AI explainability platform
+        <h1 className="font-display text-[24px] font-semibold tracking-[-0.02em] text-ink">
+          Create an account
+        </h1>
+        <p className="mt-1 text-[13px] text-[var(--text-muted)]">
+          Start asking questions with a full reasoning trace.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Full Name */}
-        <div className="space-y-1">
-          <label className="text-xs font-mono font-medium text-ink">Full Name</label>
-          <div className="relative">
-            <User className="w-4 h-4 absolute left-3 top-3 text-muted" />
-            <Input {...register("name")} placeholder="Dr. Soumya Jain" className="pl-9" />
-          </div>
-          {errors.name && (
-            <p className="text-[11px] font-mono text-rose-500 mt-1">{errors.name.message}</p>
-          )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <div className="space-y-1.5">
+          <label htmlFor="name" className="text-[12px] font-medium text-[var(--text-secondary)]">
+            Name
+          </label>
+          <Input id="name" {...register("name")} placeholder="Your name" autoComplete="name" />
+          {fieldError(errors.name?.message)}
         </div>
 
-        {/* Email Address */}
-        <div className="space-y-1">
-          <label className="text-xs font-mono font-medium text-ink">Email Address</label>
-          <div className="relative">
-            <Mail className="w-4 h-4 absolute left-3 top-3 text-muted" />
-            <Input
-              {...register("email")}
-              placeholder="researcher@lnmiit.ac.in"
-              type="email"
-              className="pl-9"
-            />
-          </div>
-          {errors.email && (
-            <p className="text-[11px] font-mono text-rose-500 mt-1">{errors.email.message}</p>
-          )}
+        <div className="space-y-1.5">
+          <label htmlFor="email" className="text-[12px] font-medium text-[var(--text-secondary)]">
+            Email
+          </label>
+          <Input
+            id="email"
+            {...register("email")}
+            type="email"
+            placeholder="you@university.edu"
+            autoComplete="email"
+          />
+          {fieldError(errors.email?.message)}
         </div>
 
-        {/* Password */}
-        <div className="space-y-1">
-          <label className="text-xs font-mono font-medium text-ink">Password</label>
-          <div className="relative">
-            <Lock className="w-4 h-4 absolute left-3 top-3 text-muted" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="text-[12px] font-medium text-[var(--text-secondary)]">
+              Password
+            </label>
             <Input
+              id="password"
               {...register("password")}
-              placeholder="••••••••"
               type="password"
-              className="pl-9"
+              placeholder="At least 6 characters"
+              autoComplete="new-password"
             />
+            {fieldError(errors.password?.message)}
           </div>
-          {errors.password && (
-            <p className="text-[11px] font-mono text-rose-500 mt-1">{errors.password.message}</p>
-          )}
-        </div>
 
-        {/* Confirm Password */}
-        <div className="space-y-1">
-          <label className="text-xs font-mono font-medium text-ink">Confirm Password</label>
-          <div className="relative">
-            <Lock className="w-4 h-4 absolute left-3 top-3 text-muted" />
+          <div className="space-y-1.5">
+            <label htmlFor="confirmPassword" className="text-[12px] font-medium text-[var(--text-secondary)]">
+              Confirm
+            </label>
             <Input
+              id="confirmPassword"
               {...register("confirmPassword")}
-              placeholder="••••••••"
               type="password"
-              className="pl-9"
+              placeholder="Repeat password"
+              autoComplete="new-password"
             />
+            {fieldError(errors.confirmPassword?.message)}
           </div>
-          {errors.confirmPassword && (
-            <p className="text-[11px] font-mono text-rose-500 mt-1">
-              {errors.confirmPassword.message}
-            </p>
-          )}
         </div>
 
-        {/* Terms Checkbox */}
         <div className="space-y-1">
-          <label className="flex items-center space-x-2 text-xs text-muted cursor-pointer">
+          <label htmlFor="terms" className="flex cursor-pointer items-start gap-2 text-[12px] text-[var(--text-secondary)]">
             <input
+              id="terms"
               type="checkbox"
               {...register("terms")}
-              className="rounded accent-amber-500 focus:ring-amber-500"
+              className="mt-0.5 h-3.5 w-3.5 rounded border-[var(--border-strong)] accent-[var(--accent-primary)]"
             />
-            <span>I agree to the academic terms & research license</span>
+            <span>I agree to the academic terms and research license.</span>
           </label>
-          {errors.terms && (
-            <p className="text-[11px] font-mono text-rose-500">{errors.terms.message}</p>
-          )}
+          {fieldError(errors.terms?.message)}
         </div>
 
-        <Button
-          type="submit"
-          variant="amber"
-          className="w-full font-semibold h-11"
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <>
-              <span>Create Account</span>
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </>
-          )}
+        <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+          {loading ? "Creating account…" : "Create account"}
         </Button>
       </form>
 
-      <p className="text-center text-xs text-muted">
+      <p className="text-center text-[12px] text-[var(--text-muted)]">
         Already have an account?{" "}
-        <Link href="/auth/sign-in" className="text-amber-600 dark:text-amber-400 font-semibold hover:underline">
+        <Link
+          href="/auth/sign-in"
+          className="font-medium text-[var(--accent-text)] hover:text-[var(--accent-text-strong)]"
+        >
           Sign in
         </Link>
       </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
 interface AttentionHeatmapProps {
@@ -9,38 +9,46 @@ interface AttentionHeatmapProps {
   colLabels: string[];
 }
 
-export function AttentionHeatmap({ matrix, rowLabels, colLabels }: AttentionHeatmapProps) {
-  const [hoveredCell, setHoveredCell] = useState<{ r: number; c: number; val: number } | null>(
-    null
-  );
+/** Lavender ramp: near-white -> brand lavender -> deep lavender at full attention. */
+const RAMP: [number, number, number][] = [
+  [251, 250, 248],
+  [159, 160, 255],
+  [58, 59, 168],
+];
 
+function cellColor(value: number): string {
+  const v = Math.min(1, Math.max(0, value));
+  const [from, to, t] = v < 0.5 ? [RAMP[0], RAMP[1], v * 2] : [RAMP[1], RAMP[2], (v - 0.5) * 2];
+  const mixed = from.map((c, i) => Math.round(c + (to[i] - c) * t));
+  return `rgb(${mixed.join(",")})`;
+}
+
+export function AttentionHeatmap({ matrix, rowLabels, colLabels }: AttentionHeatmapProps) {
   if (!matrix || matrix.length === 0) return null;
 
   return (
     <TooltipProvider>
-      <div className="space-y-3 p-3 rounded-xl border border-surface bg-surface/50 text-xs">
-        <div className="flex items-center justify-between">
-          <span className="font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-            Verification Pass Attention Saliency Matrix
+      <div className="rounded-md border border-[var(--border-surface)] overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[var(--border-surface)] px-2.5 py-1.5">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+            Attention matrix
           </span>
-          <div className="flex items-center space-x-1 font-mono text-[10px] text-muted">
-            <span>0.0</span>
-            <div className="h-2 w-16 rounded bg-gradient-to-r from-amber-500/10 via-amber-500/50 to-amber-500" />
-            <span>1.0</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] text-[var(--text-muted)]">0</span>
+            <div className="h-1.5 w-14 rounded-full bg-gradient-to-r from-[#fbfaf8] via-[#9fa0ff] to-[#3a3ba8] border border-[var(--border-surface)]" />
+            <span className="text-[9px] text-[var(--text-muted)]">1</span>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="border-collapse">
             <thead>
               <tr>
-                <th className="p-1 text-left font-mono text-[10px] text-muted font-normal min-w-[100px]">
-                  Step \ Keyword
-                </th>
-                {colLabels.map((col, idx) => (
+                <th className="sticky left-0 bg-[var(--bg-surface)] p-1 text-left text-[9px] font-normal text-[var(--text-muted)]" />
+                {colLabels.map((col, i) => (
                   <th
-                    key={idx}
-                    className="p-1 text-center font-mono text-[10px] text-ink font-semibold truncate max-w-[80px]"
+                    key={i}
+                    className="p-1 text-center text-[9px] font-medium text-[var(--text-muted)] max-w-[64px] truncate"
                     title={col}
                   >
                     {col}
@@ -49,33 +57,27 @@ export function AttentionHeatmap({ matrix, rowLabels, colLabels }: AttentionHeat
               </tr>
             </thead>
             <tbody>
-              {matrix.map((row, rIdx) => (
-                <tr key={rIdx}>
+              {matrix.map((row, r) => (
+                <tr key={r}>
                   <td
-                    className="p-1 text-left font-mono text-[10px] text-muted truncate max-w-[120px]"
-                    title={rowLabels[rIdx] || `Step ${rIdx + 1}`}
+                    className="sticky left-0 bg-[var(--bg-surface)] p-1 text-[9px] text-[var(--text-muted)] max-w-[92px] truncate"
+                    title={rowLabels[r] || `row ${r + 1}`}
                   >
-                    {rowLabels[rIdx] || `Step ${rIdx + 1}`}
+                    {rowLabels[r] || `${r + 1}`}
                   </td>
-                  {row.map((val, cIdx) => (
-                    <td key={cIdx} className="p-1 text-center">
+                  {row.map((val, c) => (
+                    <td key={c} className="p-0.5">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div
-                            onMouseEnter={() => setHoveredCell({ r: rIdx, c: cIdx, val })}
-                            onMouseLeave={() => setHoveredCell(null)}
-                            style={{
-                              backgroundColor: `rgba(217, 119, 6, ${Math.max(0.1, val)})`,
-                            }}
-                            className="h-7 w-full min-w-[28px] rounded flex items-center justify-center font-mono text-[10px] font-semibold text-zinc-950 transition-all hover:scale-105 cursor-pointer shadow-sm"
-                          >
-                            {val.toFixed(2)}
-                          </div>
+                            className="h-5 w-6 rounded-sm border border-white/40"
+                            style={{ backgroundColor: cellColor(val) }}
+                          />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="font-mono">
-                            {rowLabels[rIdx]} → <strong>{colLabels[cIdx]}</strong>: {val.toFixed(3)}
-                          </p>
+                          <span className="font-mono text-[11px]">
+                            {rowLabels[r]} → {colLabels[c]}: {val.toFixed(3)}
+                          </span>
                         </TooltipContent>
                       </Tooltip>
                     </td>

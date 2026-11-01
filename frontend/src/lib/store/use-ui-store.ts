@@ -1,11 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type Theme = "light" | "dark" | "system";
 export type StrictnessLevel = "standard" | "thorough";
 
 interface UIState {
-  theme: Theme;
   sidebarOpen: boolean;
   tracePanelOpen: boolean;
   activeTraceTab: "planner" | "extractor" | "qa" | "all";
@@ -13,8 +11,7 @@ interface UIState {
   alwaysShowTrace: boolean;
   verificationStrictness: StrictnessLevel;
   showHeatmapsByDefault: boolean;
-  
-  setTheme: (theme: Theme) => void;
+
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   toggleTracePanel: () => void;
@@ -29,16 +26,14 @@ interface UIState {
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
-      theme: "dark",
       sidebarOpen: true,
       tracePanelOpen: true,
       activeTraceTab: "all",
       density: "comfortable",
       alwaysShowTrace: true,
-      verificationStrictness: "thorough",
+      verificationStrictness: "standard",
       showHeatmapsByDefault: true,
 
-      setTheme: (theme) => set({ theme }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       toggleTracePanel: () => set((state) => ({ tracePanelOpen: !state.tracePanelOpen })),
@@ -51,6 +46,13 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "raghive-ui-preferences",
+      version: 2,
+      // Drop the removed theme field from previously persisted state.
+      migrate: (persisted: unknown) => {
+        const next = { ...(persisted as Record<string, unknown>) };
+        delete next.theme;
+        return next as Partial<UIState>;
+      },
     }
   )
 );

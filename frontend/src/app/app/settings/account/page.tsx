@@ -5,7 +5,6 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Lock, ShieldAlert, Trash2, Key } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/use-auth";
@@ -38,7 +37,7 @@ export default function AccountSettingsPage() {
       return;
     }
     if (USE_MOCK_API) {
-      toast.success("Password updated (mock mode — nothing was changed).");
+      toast.success("Password updated (mock mode — nothing changed).");
       setOldPass("");
       setNewPass("");
       return;
@@ -46,7 +45,7 @@ export default function AccountSettingsPage() {
     setChanging(true);
     try {
       await changeEmailPassword(oldPass, newPass);
-      toast.success("Password updated successfully!");
+      toast.success("Password updated");
       setOldPass("");
       setNewPass("");
     } catch (err: unknown) {
@@ -59,20 +58,17 @@ export default function AccountSettingsPage() {
   const handleDeleteAccount = async () => {
     if (confirmText !== "DELETE") return;
     if (USE_MOCK_API) {
-      toast.error("Account permanently deleted (mock mode — nothing was deleted).");
+      toast.error("Account deleted (mock mode — nothing deleted).");
       await signOut();
       router.push("/");
       return;
     }
     setDeleting(true);
     try {
-      // 1. Re-verify the password while the session is fresh.
       await reauthenticateEmail(deletePass);
-      // 2. Remove chats/messages on the backend while the bearer token is still valid.
       await ApiClient.deleteAccountData(idToken || undefined);
-      // 3. Delete the Firebase identity last.
       await deleteCurrentFirebaseUser();
-      toast.success("Account permanently deleted.");
+      toast.success("Account deleted.");
       router.push("/");
     } catch (err: unknown) {
       toast.error(errorText(err, "Could not delete account."));
@@ -82,37 +78,44 @@ export default function AccountSettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Key className="w-4 h-4 text-amber-500" />
-            <span>Change Password</span>
-          </CardTitle>
-          <CardDescription>Update your authentication password</CardDescription>
+          <CardTitle>Password</CardTitle>
+          <CardDescription>Change the password for this account.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-xs font-mono font-medium text-ink">Current Password</label>
-              <Input
-                type="password"
-                value={oldPass}
-                onChange={(e) => setOldPass(e.target.value)}
-                placeholder="••••••••"
-              />
+          <form onSubmit={handleChangePassword} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label htmlFor="current-password" className="text-[12px] font-medium text-[var(--text-secondary)]">
+                  Current password
+                </label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  value={oldPass}
+                  onChange={(e) => setOldPass(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="new-password" className="text-[12px] font-medium text-[var(--text-secondary)]">
+                  New password
+                </label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="At least 6 characters"
+                  autoComplete="new-password"
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-mono font-medium text-ink">New Password</label>
-              <Input
-                type="password"
-                value={newPass}
-                onChange={(e) => setNewPass(e.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
-            <Button type="submit" variant="amber" size="sm" className="font-semibold" disabled={changing}>
-              Update Password
+            <Button type="submit" variant="primary" size="sm" disabled={changing || !oldPass || !newPass}>
+              {changing ? "Updating…" : "Update password"}
             </Button>
           </form>
         </CardContent>
@@ -120,80 +123,77 @@ export default function AccountSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Lock className="w-4 h-4 text-amber-500" />
-            <span>Active Sessions</span>
-          </CardTitle>
-          <CardDescription>Devices currently authenticated to your account</CardDescription>
+          <CardTitle>Session</CardTitle>
+          <CardDescription>
+            This build does not track individual devices, so only the current browser session is shown.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="p-3 rounded-xl border border-surface bg-surface flex items-center justify-between text-xs">
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <div>
-                <span className="font-mono font-semibold text-ink">Current Browser Session</span>
-                <p className="text-[10px] font-mono text-muted">This device only — session listing is not tracked</p>
-              </div>
+        <CardContent>
+          <div className="flex items-center justify-between rounded-lg border border-[var(--border-surface)] px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--status-success)]" />
+              <span className="text-[12px] text-[var(--text-secondary)]">Current browser session</span>
             </div>
-            <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded border border-emerald-500/30">
-              Active Now
+            <span className="rounded border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-1.5 py-0.5 text-[10px] text-[var(--status-success)]">
+              active
             </span>
           </div>
         </CardContent>
       </Card>
 
-      {/* Danger Zone */}
-      <Card className="border-rose-500/30 bg-rose-500/5">
+      <Card className="border-[var(--status-danger-border)]">
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2 text-rose-600 dark:text-rose-400">
-            <ShieldAlert className="w-4 h-4" />
-            <span>Danger Zone</span>
-          </CardTitle>
-          <CardDescription>Irreversible actions on your research account and saved traces</CardDescription>
+          <CardTitle className="text-[var(--status-danger)]">Delete account</CardTitle>
+          <CardDescription>
+            Permanently deletes your chats, saved traces, and profile. This cannot be undone.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button variant="danger" size="sm" onClick={() => setDeleteModalOpen(true)} className="font-semibold">
-            <Trash2 className="w-3.5 h-3.5 mr-2" />
-            Delete RAGHive Account
+          <Button variant="danger" size="sm" onClick={() => setDeleteModalOpen(true)}>
+            Delete account
           </Button>
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Modal */}
       <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-rose-500">Delete RAGHive Account</DialogTitle>
+            <DialogTitle className="text-[var(--status-danger)]">Delete account</DialogTitle>
             <DialogDescription>
-              This action cannot be undone. All saved chat histories, attribution traces, and settings will be permanently removed.
+              Your conversations, traces, and profile will be removed permanently.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
+          <div className="space-y-3">
             {!USE_MOCK_API && (
-              <div className="space-y-1">
-                <label className="text-xs font-mono text-ink">Current password</label>
+              <div className="space-y-1.5">
+                <label htmlFor="delete-password" className="text-[12px] text-[var(--text-secondary)]">
+                  Current password
+                </label>
                 <Input
+                  id="delete-password"
                   type="password"
                   value={deletePass}
                   onChange={(e) => setDeletePass(e.target.value)}
                   placeholder="••••••••"
-                  className="font-mono"
+                  autoComplete="current-password"
                 />
               </div>
             )}
-            <p className="text-xs font-mono text-ink">
-              Type <strong className="text-rose-500">DELETE</strong> to confirm:
-            </p>
-            <Input
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="DELETE"
-              className="font-mono"
-            />
+            <div className="space-y-1.5">
+              <label htmlFor="delete-confirm" className="text-[12px] text-[var(--text-secondary)]">
+                Type <span className="font-medium text-[var(--status-danger)]">DELETE</span> to confirm
+              </label>
+              <Input
+                id="delete-confirm"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="DELETE"
+              />
+            </div>
           </div>
 
-          <div className="flex justify-end space-x-2 pt-2">
+          <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setDeleteModalOpen(false)}>
               Cancel
             </Button>
@@ -203,7 +203,7 @@ export default function AccountSettingsPage() {
               disabled={confirmText !== "DELETE" || deleting || (!USE_MOCK_API && !deletePass)}
               onClick={handleDeleteAccount}
             >
-              Permanently Delete Account
+              {deleting ? "Deleting…" : "Delete account"}
             </Button>
           </div>
         </DialogContent>

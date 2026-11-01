@@ -1,17 +1,83 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
 
+/*
+ * Map the stock Tailwind ramps onto the RAGHive palette so any remaining
+ * utility (amber/teal/emerald/rose) resolves to lavender/mint/coral.
+ */
+@theme {
+  --color-amber-50: #f5f5ff;
+  --color-amber-100: #ebebff;
+  --color-amber-200: #d9d9ff;
+  --color-amber-300: #bfc0ff;
+  --color-amber-400: #9fa0ff;
+  --color-amber-500: #8586f2;
+  --color-amber-600: #6b6ce0;
+  --color-amber-700: #5354c4;
+  --color-amber-800: #3f409c;
+  --color-amber-900: #2f3075;
+
+  --color-teal-50: #f2f8f7;
+  --color-teal-100: #e6f2f0;
+  --color-teal-200: #d5e8e6;
+  --color-teal-300: #b4d5d1;
+  --color-teal-400: #8cbbb5;
+  --color-teal-500: #5e9c94;
+  --color-teal-600: #437f77;
+  --color-teal-700: #2e6a63;
+  --color-teal-800: #24524d;
+  --color-teal-900: #1c3f3b;
+
+  --color-emerald-500: #5e9c94;
+  --color-emerald-600: #437f77;
+  --color-emerald-700: #2e6a63;
+
+  --color-rose-50: #fff5f5;
+  --color-rose-100: #ffe5e5;
+  --color-rose-200: #ffc9c9;
+  --color-rose-300: #ffa3a3;
+  --color-rose-400: #ff7171;
+  --color-rose-500: #f25555;
+  --color-rose-600: #d94141;
+  --color-rose-700: #b83434;
+  --color-rose-800: #8f2828;
+
+  --color-zinc-950: #1f1d2b;
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
 @layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
     background-color: var(--bg-app);
     color: var(--text-ink);
     font-family: var(--font-inter-tight), system-ui, -apple-system, sans-serif;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  ::selection {
+    background: var(--accent-primary-border);
+    color: var(--accent-contrast);
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
   }
 }
 
 .font-display {
   font-family: var(--font-fraunces), Georgia, serif;
+  font-optical-sizing: auto;
 }
 
 .font-ui {
@@ -19,24 +85,29 @@
 }
 
 .font-mono {
-  font-family: var(--font-jetbrains-mono), monospace;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-variant-ligatures: none;
 }
 
-/* Custom token helper utility classes */
+/* Token helpers */
 .bg-app { background-color: var(--bg-app); }
 .bg-surface { background-color: var(--bg-surface); }
+.bg-subtle { background-color: var(--bg-subtle); }
+.bg-sidebar { background-color: var(--bg-sidebar); }
 .border-surface { border-color: var(--border-surface); }
+.border-strong { border-color: var(--border-strong); }
 .text-ink { color: var(--text-ink); }
+.text-secondary { color: var(--text-secondary); }
 .text-muted { color: var(--text-muted); }
 
 .bg-accent-amber { background-color: var(--accent-primary); }
 .bg-accent-amber-light { background-color: var(--accent-primary-light); }
-.text-accent-amber { color: var(--accent-primary); }
-.border-accent-amber { border-color: var(--accent-primary); }
+.text-accent-amber { color: var(--accent-text); }
+.border-accent-amber { border-color: var(--accent-ring); }
 
 .bg-accent-teal { background-color: var(--accent-secondary); }
 .bg-accent-teal-light { background-color: var(--accent-secondary-light); }
-.text-accent-teal { color: var(--accent-secondary); }
+.text-accent-teal { color: var(--accent-secondary-text); }
 .border-accent-teal { border-color: var(--accent-secondary); }
 
 .text-status-success { color: var(--status-success); }
@@ -46,8 +117,65 @@
 .text-status-danger { color: var(--status-danger); }
 .bg-status-danger-light { background-color: var(--status-danger-bg); }
 
-/* Keyboard focus ring styling */
-*:focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 2px;
+/* Hairline dot grid */
+.bg-dot-grid {
+  background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Soft pastel mesh built from the four brand colours */
+.bg-pastel-mesh {
+  background:
+    radial-gradient(40% 50% at 12% 18%, rgba(159, 160, 255, 0.45), transparent 70%),
+    radial-gradient(38% 46% at 88% 14%, rgba(213, 232, 230, 0.9), transparent 70%),
+    radial-gradient(42% 50% at 78% 88%, rgba(255, 243, 227, 0.95), transparent 70%),
+    radial-gradient(22% 26% at 30% 92%, rgba(255, 113, 113, 0.16), transparent 70%);
+}
+
+/* Highlighter stroke behind a word in a headline */
+.marker {
+  background-image: linear-gradient(transparent 66%, rgba(159, 160, 255, 0.5) 66%, rgba(159, 160, 255, 0.5) 90%, transparent 90%);
+  padding: 0 0.06em;
+  border-radius: 0.1em;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Motion — always disabled for users who ask for reduced motion */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-fade-up { animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-slide-in { animation: slide-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-float { animation: float-slow 7s ease-in-out infinite; }
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-slide-in,
+  .animate-float {
+    animation: none;
+  }
 }

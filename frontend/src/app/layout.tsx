@@ -7,6 +7,7 @@ const fraunces = Fraunces({
   subsets: ["latin"],
   variable: "--font-fraunces",
   display: "swap",
+  axes: ["SOFT", "WONK"],
 });
 
 const interTight = Inter_Tight({
@@ -35,13 +36,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${interTight.variable} ${jetbrainsMono.variable} dark`}
+      className={`${fraunces.variable} ${interTight.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen bg-app text-ink font-ui antialiased selection:bg-amber-500/20 selection:text-amber-500">
-        <Providers>
-          {children}
-        </Providers>
+      <body className="min-h-screen bg-app text-ink font-ui antialiased">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

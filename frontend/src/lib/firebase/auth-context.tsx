@@ -37,6 +37,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // If mock mode or demo key, set mock user as default
     if (USE_MOCK_AUTH) {
+      // One-time synchronous seed for the demo identity: initialising the provider's
+      // state here is the intended setup path, not derived state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUser(MOCK_USER as User);
       setIdToken("mock_firebase_id_token_raghive_bearer_12345");
       setLoading(false);

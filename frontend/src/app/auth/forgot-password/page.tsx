@@ -10,10 +10,10 @@ import { Input } from "@/components/ui/input";
 import { sendPasswordReset } from "@/lib/firebase/auth";
 import { USE_MOCK_API } from "@/lib/api/mock/mock-mode";
 import { toast } from "sonner";
-import { Mail, ArrowLeft, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 
 const forgotSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
+  email: z.string().email("Enter a valid email address"),
 });
 
 type ForgotForm = z.infer<typeof forgotSchema>;
@@ -26,22 +26,20 @@ export default function ForgotPasswordPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<ForgotForm>({
-    resolver: zodResolver(forgotSchema),
-  });
+  } = useForm<ForgotForm>({ resolver: zodResolver(forgotSchema) });
 
   const onSubmit = async (data: ForgotForm) => {
     setLoading(true);
     try {
       if (USE_MOCK_API) {
-        toast.success("Password reset email sent (Mock Mode)");
+        toast.success("Reset email sent (mock mode)");
       } else {
         await sendPasswordReset(data.email);
-        toast.success("Password reset email sent!");
+        toast.success("Reset email sent");
       }
       setSent(true);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to send reset link.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not send the reset link.");
     } finally {
       setLoading(false);
     }
@@ -50,65 +48,64 @@ export default function ForgotPasswordPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-ink">Reset Your Password</h1>
-        <p className="text-xs text-muted mt-1 font-mono">
-          We'll send a password recovery link to your registered email
+        <h1 className="font-display text-[24px] font-semibold tracking-[-0.02em] text-ink">
+          Reset password
+        </h1>
+        <p className="mt-1 text-[13px] text-[var(--text-muted)]">
+          We will email you a link to choose a new password.
         </p>
       </div>
 
       {sent ? (
-        <div className="p-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-center space-y-3">
-          <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-          <h3 className="font-display font-semibold text-lg text-ink">Reset Link Dispatched</h3>
-          <p className="text-xs text-muted">
-            Check your inbox for step-by-step instructions to restore your account access.
-          </p>
-          <Button asChild variant="outline" size="sm" className="mt-2 font-mono">
-            <Link href="/auth/sign-in">
-              <ArrowLeft className="w-3.5 h-3.5 mr-1" />
-              Return to Sign In
-            </Link>
-          </Button>
+        <div className="space-y-4">
+          <div className="flex items-start gap-2.5 rounded-lg border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-3 py-2.5">
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--status-success)]" />
+            <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              If an account exists for that address, a reset link is on its way. Check your spam folder
+              if it does not arrive within a few minutes.
+            </p>
+          </div>
+          <Link
+            href="/auth/sign-in"
+            className="inline-flex items-center gap-1.5 text-[12px] text-[var(--accent-text)] hover:text-[var(--accent-text-strong)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to sign in
+          </Link>
         </div>
       ) : (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-mono font-medium text-ink">Email Address</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3 top-3 text-muted" />
+        <>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-[12px] font-medium text-[var(--text-secondary)]">
+                Email
+              </label>
               <Input
+                id="email"
                 {...register("email")}
-                placeholder="researcher@lnmiit.ac.in"
                 type="email"
-                className="pl-9"
+                placeholder="you@university.edu"
+                autoComplete="email"
               />
+              {errors.email && (
+                <p className="text-[11px] text-[var(--status-danger)]">{errors.email.message}</p>
+              )}
             </div>
-            {errors.email && (
-              <p className="text-[11px] font-mono text-rose-500 mt-1">{errors.email.message}</p>
-            )}
-          </div>
 
-          <Button
-            type="submit"
-            variant="amber"
-            className="w-full font-semibold h-11"
-            disabled={loading}
+            <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+              {loading ? "Sending…" : "Send reset link"}
+            </Button>
+          </form>
+
+          <Link
+            href="/auth/sign-in"
+            className="inline-flex items-center gap-1.5 text-[12px] text-[var(--muted)] text-[var(--text-muted)] hover:text-ink"
           >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <span>Send Reset Password Link</span>
-            )}
-          </Button>
-        </form>
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to sign in
+          </Link>
+        </>
       )}
-
-      <p className="text-center text-xs text-muted">
-        Remembered your password?{" "}
-        <Link href="/auth/sign-in" className="text-amber-600 dark:text-amber-400 font-semibold hover:underline">
-          Back to Sign In
-        </Link>
-      </p>
     </div>
   );
 }

@@ -1,10 +1,12 @@
 "use client";
 
 import React from "react";
-import { Compass, Filter, ShieldCheck, RefreshCw } from "lucide-react";
+import { Check } from "lucide-react";
 import { useChatStore } from "@/lib/store/use-chat-store";
 import { motion, AnimatePresence } from "motion/react";
 import { useReducedMotion } from "@/lib/hooks/use-reduced-motion";
+import { STAGES } from "../trace/stage-meta";
+import { cn } from "@/lib/utils/cn";
 
 export function AgentStatusIndicator() {
   const { streamingStatus, streamingSubStatus } = useChatStore();
@@ -12,60 +14,54 @@ export function AgentStatusIndicator() {
 
   if (streamingStatus === "idle" || streamingStatus === "done") return null;
 
-  const agentDetails = {
-    planner: {
-      label: "Planner Agent",
-      desc: streamingSubStatus || "Decomposing query & running attention verification pass...",
-      icon: Compass,
-      colorClass: "text-amber-500 bg-amber-500/10 border-amber-500/30",
-    },
-    extractor: {
-      label: "Extractor Agent",
-      desc: streamingSubStatus || "Searching ChromaDB vector store & scoring NormEnsembleXAI attribution...",
-      icon: Filter,
-      colorClass: "text-teal-500 bg-teal-500/10 border-teal-500/30",
-    },
-    qa: {
-      label: "QA / Reasoning Agent",
-      desc: streamingSubStatus || "Synthesizing grounded answer & generating citation heatmap...",
-      icon: ShieldCheck,
-      colorClass: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30",
-    },
-  }[streamingStatus] || {
-    label: "RAGHive Pipeline",
-    desc: "Processing query through multi-agent verification...",
-    icon: RefreshCw,
-    colorClass: "text-amber-500 bg-amber-500/10 border-amber-500/30",
-  };
-
-  const Icon = agentDetails.icon;
+  const activeIndex = STAGES.findIndex((s) => s.key === streamingStatus);
+  const active = STAGES[activeIndex] ?? STAGES[0];
 
   return (
-    <div className="w-full max-w-3xl mx-auto mb-3 px-4">
+    <div className="mx-auto mb-2 w-full max-w-[760px] px-6">
       <AnimatePresence mode="wait">
         <motion.div
           key={streamingStatus}
-          initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 6 }}
+          initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
-          transition={{ duration: 0.2 }}
-          className={`flex items-center space-x-3 p-3 rounded-xl border ${agentDetails.colorClass} shadow-xs`}
+          exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+          transition={{ duration: 0.16 }}
+          className="flex items-center gap-3 rounded-full border border-[var(--border-surface)] bg-[var(--bg-surface)] py-1.5 pl-1.5 pr-4 shadow-xs"
+          role="status"
+          aria-live="polite"
         >
-          <div className="relative">
-            <Icon className="w-5 h-5 animate-pulse" />
-            <RefreshCw className="w-3 h-3 absolute -bottom-1 -right-1 animate-spin text-amber-500" style={{ animationDuration: '3s' }} />
+          <div className="flex shrink-0 items-center gap-1">
+            {STAGES.map((stage, i) => {
+              const StageIcon = stage.icon;
+              const isDone = i < activeIndex;
+              const isActive = i === activeIndex;
+              return (
+                <span
+                  key={stage.key}
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-full transition-all",
+                    isDone && "bg-[var(--status-success-bg)] text-[var(--status-success)]",
+                    isActive && cn(stage.tile, "ring-2 ring-white shadow-sm"),
+                    !isDone && !isActive && "bg-[var(--bg-subtle)] text-[var(--text-muted)]"
+                  )}
+                  title={stage.label}
+                >
+                  {isDone ? <Check className="h-3.5 w-3.5" /> : <StageIcon className="h-3.5 w-3.5" />}
+                </span>
+              );
+            })}
           </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-xs font-bold uppercase tracking-wider">
-                {agentDetails.label}
-              </span>
-              <span className="font-mono text-[10px] opacity-80 animate-pulse">
-                LIVE PIPELINE ACTIVE
-              </span>
-            </div>
-            <p className="text-xs opacity-90 mt-0.5">{agentDetails.desc}</p>
-          </div>
+
+          <p className="min-w-0 flex-1 truncate text-[12px] text-[var(--text-secondary)]">
+            <span className="font-medium text-ink">{active.label}</span>
+            <span className="mx-1.5 text-[var(--border-strong)]">/</span>
+            {streamingSubStatus || "Working…"}
+          </p>
+
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-60", active.dot)} />
+            <span className={cn("relative inline-flex h-2 w-2 rounded-full", active.dot)} />
+          </span>
         </motion.div>
       </AnimatePresence>
     </div>
